@@ -15,11 +15,23 @@ import https from 'https';
 
 // --- CONFIGURAÇÃO DE SEGURANÇA E AMBIENTE (LGPD) ---
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
+
 // Chave de 32 bytes para AES-256. 
-// AVISO: Em produção, defina ENCRYPTION_KEY no .env para não perder dados ao reiniciar.
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY 
-    ? Buffer.from(process.env.ENCRYPTION_KEY, 'hex') 
-    : crypto.randomBytes(32); 
+// Lógica robusta: Se a chave fornecida não tiver 32 bytes, fazemos um hash SHA-256 dela para garantir o tamanho.
+let keyBuffer;
+if (process.env.ENCRYPTION_KEY) {
+    // Tenta interpretar como hex
+    keyBuffer = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
+    // Se não tiver exatamente 32 bytes, usa o hash da string original
+    if (keyBuffer.length !== 32) {
+        console.warn("Aviso: ENCRYPTION_KEY fornecida não tem 32 bytes (64 caracteres hex). Usando SHA-256 da chave para garantir compatibilidade.");
+        keyBuffer = crypto.createHash('sha256').update(String(process.env.ENCRYPTION_KEY)).digest();
+    }
+} else {
+    // Se não fornecida, gera uma aleatória (dados criptografados serão perdidos ao reiniciar se não persistir no .env)
+    keyBuffer = crypto.randomBytes(32);
+}
+const ENCRYPTION_KEY = keyBuffer;
 const IV_LENGTH = 16; 
 
 // --- FUNÇÕES DE CRIPTOGRAFIA (AES-256-CBC) ---
@@ -28,12 +40,12 @@ function encrypt(text) {
     if (!text) return text;
     try {
         const iv = crypto.randomBytes(IV_LENGTH);
-        const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+        const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
         let encrypted = cipher.update(String(text));
         encrypted = Buffer.concat([encrypted, cipher.final()]);
         return iv.toString('hex') + ':' + encrypted.toString('hex');
     } catch (e) {
-        console.error("Erro de criptografia:", e);
+        console.error("Erro de criptografia:", e.message);
         return null;
     }
 }
@@ -44,7 +56,7 @@ function decrypt(text) {
         const textParts = text.split(':');
         const iv = Buffer.from(textParts.shift(), 'hex');
         const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-        const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+        const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
         let decrypted = decipher.update(encryptedText);
         decrypted = Buffer.concat([decrypted, decipher.final()]);
         return decrypted.toString();
@@ -233,7 +245,10 @@ const sendEmail = async (to, subject, htmlContent) => {
       console.log(`[EMAIL] Sucesso! ID: ${info.messageId}`);
       return true;
   } catch (error) {
-      console.error("[EMAIL] Erro FATAL ao enviar:", error);
+      console.error(`[EMAIL] Erro FATAL ao enviar para ${to}:`, error.message);
+      if (error.code === 'EAUTH') {
+          console.error("DICA: Verifique se o e-mail e senha no .env estão corretos. Se for Gmail, use uma 'Senha de App'.");
+      }
       return false;
   }
 };
@@ -420,6 +435,12 @@ app.post('/api/request-signup', (req, res) => {
                 </div>
                 `;
                 
+                // LOG IMPORTANTE: Exibe o link no console para testes locais ou falha de email
+                console.log('--- LINK DE ATIVAÇÃO DE CONTA ---');
+                console.log(`Para: ${email}`);
+                console.log(`Link: ${link}`);
+                console.log('---------------------------------');
+
                 await sendEmail(email, "Ative sua conta - Virgula Contábil", html);
                 logAudit('system', 'SIGNUP_REQUEST', email, req.ip);
                 res.json({ message: "Link de cadastro enviado." });
@@ -487,6 +508,13 @@ app.post('/api/recover-password', (req, res) => {
             const origin = req.headers.origin || 'https://seu-app.com';
             const link = `${origin}/?action=reset&token=${token}`;
             const resetHtml = `... (HTML de Recuperação) ... <a href="${link}">Link</a>`;
+            
+            // LOG IMPORTANTE: Exibe o link no console
+            console.log('--- LINK DE RECUPERAÇÃO DE SENHA ---');
+            console.log(`Para: ${email}`);
+            console.log(`Link: ${link}`);
+            console.log('------------------------------------');
+
             await sendEmail(email, "Recuperação de Senha - Virgula Contábil", resetHtml);
             res.json({ message: 'Email de recuperação enviado.' });
         });
