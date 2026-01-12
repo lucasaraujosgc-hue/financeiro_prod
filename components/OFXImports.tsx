@@ -40,7 +40,7 @@ const OFXImports: React.FC<OFXImportsProps> = ({ userId, banks, keywordRules, tr
 
   const getHeaders = () => ({
       'Content-Type': 'application/json',
-      'user-id': String(userId)
+      'Authorization': `Bearer ${localStorage.getItem('finance_app_token')}`
   });
 
   // Load Imports History
