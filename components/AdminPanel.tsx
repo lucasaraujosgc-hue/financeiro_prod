@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, LayoutDashboard, FileText, Trash2, LogOut, ShieldAlert, BarChart, Eye, X, Download, Calendar, Receipt, ArrowUpRight, FileSpreadsheet, Landmark, Plus, Upload, Edit2, Save, Ban, Search } from 'lucide-react';
+import { Users, LayoutDashboard, FileText, Trash2, LogOut, ShieldAlert, BarChart, Eye, X, Download, Calendar, Receipt, ArrowUpRight, FileSpreadsheet, Landmark, Plus, Upload, Edit2, Save, Ban, Search, Printer } from 'lucide-react';
 
 interface AdminPanelProps {
   onLogout: () => void;
@@ -26,7 +26,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
   const [editingBankId, setEditingBankId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // CORREÇÃO: Usar o Token JWT do localStorage
+  // CORREÇÃO: Usar o Token JWT para autenticação correta no servidor
   const getHeaders = () => {
       const token = localStorage.getItem('finance_app_token');
       return {
@@ -55,7 +55,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
       try {
         const res = await fetch('/api/admin/users', { headers: getHeaders() }); 
         if(res.ok) setUsers(await res.json()); 
-      } finally { setLoading(false); }
+        else console.error("Erro ao buscar usuários:", res.status);
+      } catch(e) { console.error(e); }
+      finally { setLoading(false); }
   };
   
   const fetchAuditData = async () => { 
@@ -71,6 +73,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
       try {
         const res = await fetch('/api/admin/banks', { headers: getHeaders() }); 
         if(res.ok) setAdminBanks(await res.json()); 
+        else console.error("Erro ao buscar bancos:", res.status);
       } finally { setLoading(false); }
   };
 
@@ -170,6 +173,110 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
         });
   };
 
+  const handleExportExcel = () => {
+      if (!userDetails || !selectedUser) return;
+      const filtered = filterByDate(userDetails.transactions);
+      
+      if (filtered.length === 0) return alert("Sem dados para exportar no período selecionado.");
+
+      // Criar conteúdo CSV compatível com Excel (separado por ponto e vírgula para PT-BR)
+      const headers = ["Data", "Descrição", "Categoria", "Banco", "Tipo", "Valor", "Status"];
+      const rows = filtered.map((t: any) => [
+          new Date(t.date).toLocaleDateString('pt-BR'),
+          `"${t.description.replace(/"/g, '""')}"`, // Escapar aspas
+          `"${t.category_name || '-'}"`,
+          `"${t.bank_name || '-'}"`,
+          t.type,
+          t.value.toFixed(2).replace('.', ','), // Formato brasileiro de moeda
+          t.reconciled ? "Conciliado" : "Pendente"
+      ]);
+
+      const csvContent = [headers.join(';'), ...rows.map((r: any[]) => r.join(';'))].join('\n');
+      
+      // Adicionar BOM para Excel reconhecer UTF-8 (acentos)
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio_${selectedUser.razao_social.replace(/\s+/g, '_')}_${startDate}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+  };
+
+  const handlePrintReport = () => {
+      if (!userDetails || !selectedUser) return;
+      const filtered = filterByDate(userDetails.transactions);
+      
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+          const totalReceitas = filtered.filter((t: any) => t.type === 'credito').reduce((acc: number, t: any) => acc + t.value, 0);
+          const totalDespesas = filtered.filter((t: any) => t.type === 'debito').reduce((acc: number, t: any) => acc + t.value, 0);
+          const saldo = totalReceitas - totalDespesas;
+
+          printWindow.document.write(`
+            <html>
+              <head>
+                <title>Relatório Financeiro - ${selectedUser.razao_social}</title>
+                <style>
+                  body { font-family: sans-serif; padding: 20px; }
+                  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+                  th { background-color: #f2f2f2; }
+                  .header { margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                  .summary { display: flex; gap: 20px; margin-bottom: 20px; }
+                  .card { border: 1px solid #ddd; padding: 10px; border-radius: 4px; min-width: 150px; }
+                  .credito { color: green; }
+                  .debito { color: red; }
+                </style>
+              </head>
+              <body>
+                <div class="header">
+                  <h1>Relatório Financeiro</h1>
+                  <p><strong>Empresa:</strong> ${selectedUser.razao_social}</p>
+                  <p><strong>CNPJ:</strong> ${selectedUser.cnpj}</p>
+                  <p><strong>Período:</strong> ${new Date(startDate).toLocaleDateString()} a ${new Date(endDate).toLocaleDateString()}</p>
+                </div>
+                
+                <div class="summary">
+                    <div class="card"><strong>Receitas:</strong> <span class="credito">R$ ${totalReceitas.toFixed(2)}</span></div>
+                    <div class="card"><strong>Despesas:</strong> <span class="debito">R$ ${totalDespesas.toFixed(2)}</span></div>
+                    <div class="card"><strong>Saldo:</strong> <strong>R$ ${saldo.toFixed(2)}</strong></div>
+                </div>
+
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Descrição</th>
+                      <th>Categoria</th>
+                      <th>Banco</th>
+                      <th>Tipo</th>
+                      <th style="text-align:right">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${filtered.map((t: any) => `
+                      <tr>
+                        <td>${new Date(t.date).toLocaleDateString()}</td>
+                        <td>${t.description}</td>
+                        <td>${t.category_name || '-'}</td>
+                        <td>${t.bank_name || '-'}</td>
+                        <td>${t.type}</td>
+                        <td style="text-align:right" class="${t.type}">R$ ${t.value.toFixed(2)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+                <script>window.print();</script>
+              </body>
+            </html>
+          `);
+          printWindow.document.close();
+      }
+  };
+
   const filterByDate = (items: any[]) => items?.filter(item => { 
       const d = item.date || item.import_date; 
       return d && d.split('T')[0] >= startDate && d.split('T')[0] <= endDate; 
@@ -215,11 +322,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                       <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
                           <h3 className="text-slate-400 font-medium mb-2">Total de Usuários</h3>
-                          <p className="text-3xl font-bold text-white">{stats.users?.count}</p>
+                          <p className="text-3xl font-bold text-white">{stats.users?.count || 0}</p>
                       </div>
                       <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
                           <h3 className="text-slate-400 font-medium mb-2">Total de Lançamentos</h3>
-                          <p className="text-3xl font-bold text-white">{stats.transactions?.count}</p>
+                          <p className="text-3xl font-bold text-white">{stats.transactions?.count || 0}</p>
                       </div>
                       <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
                           <h3 className="text-slate-400 font-medium mb-2">Volume Transacionado</h3>
@@ -246,31 +353,35 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
                               </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800">
-                              {users.map(u => (
-                                  <tr key={u.id} className="hover:bg-slate-800/50">
-                                      <td className="px-6 py-4 text-slate-500">#{u.id}</td>
-                                      <td className="px-6 py-4 font-medium text-white">{u.razao_social || 'Sem Nome'}</td>
-                                      <td className="px-6 py-4 text-slate-300">{u.email}</td>
-                                      <td className="px-6 py-4 text-slate-400 font-mono text-xs">{u.cnpj}</td>
-                                      <td className="px-6 py-4 text-slate-400 text-xs">{u.phone}</td>
-                                      <td className="px-6 py-4 text-center flex items-center justify-center gap-2">
-                                          <button 
-                                            onClick={() => handleOpenUser(u)} 
-                                            className="p-2 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20"
-                                            title="Ver Detalhes"
-                                          >
-                                              <Eye size={18}/>
-                                          </button> 
-                                          <button 
-                                            onClick={() => handleDeleteUser(u.id, u.email)} 
-                                            className="p-2 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20"
-                                            title="Excluir Usuário"
-                                          >
-                                              <Trash2 size={18}/>
-                                          </button>
-                                      </td>
-                                  </tr>
-                              ))}
+                              {users.length === 0 ? (
+                                  <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-500">Nenhum usuário cadastrado.</td></tr>
+                              ) : (
+                                  users.map(u => (
+                                      <tr key={u.id} className="hover:bg-slate-800/50">
+                                          <td className="px-6 py-4 text-slate-500">#{u.id}</td>
+                                          <td className="px-6 py-4 font-medium text-white">{u.razao_social || 'Sem Nome'}</td>
+                                          <td className="px-6 py-4 text-slate-300">{u.email}</td>
+                                          <td className="px-6 py-4 text-slate-400 font-mono text-xs">{u.cnpj}</td>
+                                          <td className="px-6 py-4 text-slate-400 text-xs">{u.phone}</td>
+                                          <td className="px-6 py-4 text-center flex items-center justify-center gap-2">
+                                              <button 
+                                                onClick={() => handleOpenUser(u)} 
+                                                className="p-2 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20"
+                                                title="Ver Detalhes"
+                                              >
+                                                  <Eye size={18}/>
+                                              </button> 
+                                              <button 
+                                                onClick={() => handleDeleteUser(u.id, u.email)} 
+                                                className="p-2 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20"
+                                                title="Excluir Usuário"
+                                              >
+                                                  <Trash2 size={18}/>
+                                              </button>
+                                          </td>
+                                      </tr>
+                                  ))
+                              )}
                           </tbody>
                       </table>
                   </div>
@@ -330,20 +441,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
                       {/* List */}
                       <div className="lg:col-span-2">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              {adminBanks.map(bank => (
-                                  <div key={bank.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between group hover:border-slate-600 transition-colors">
-                                      <div className="flex items-center gap-3">
-                                          <div className="w-10 h-10 bg-white rounded-lg p-1.5 flex items-center justify-center">
-                                              <img src={bank.logo} className="max-w-full max-h-full object-contain" onError={(e) => (e.target as HTMLImageElement).src=''} />
-                                          </div>
-                                          <span className="font-medium text-white">{bank.name}</span>
-                                      </div>
-                                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => handleEditBankClick(bank)} className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded"><Edit2 size={16}/></button>
-                                          <button onClick={() => handleDeleteBank(bank.id)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded"><Trash2 size={16}/></button>
-                                      </div>
+                              {adminBanks.length === 0 ? (
+                                  <div className="col-span-2 text-center py-12 text-slate-500 bg-slate-900 rounded-xl border border-slate-800 border-dashed">
+                                      Nenhum banco global cadastrado.
                                   </div>
-                              ))}
+                              ) : (
+                                  adminBanks.map(bank => (
+                                      <div key={bank.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between group hover:border-slate-600 transition-colors">
+                                          <div className="flex items-center gap-3">
+                                              <div className="w-10 h-10 bg-white rounded-lg p-1.5 flex items-center justify-center">
+                                                  <img src={bank.logo} className="max-w-full max-h-full object-contain" onError={(e) => (e.target as HTMLImageElement).src=''} />
+                                              </div>
+                                              <span className="font-medium text-white">{bank.name}</span>
+                                          </div>
+                                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                              <button onClick={() => handleEditBankClick(bank)} className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded"><Edit2 size={16}/></button>
+                                              <button onClick={() => handleDeleteBank(bank.id)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded"><Trash2 size={16}/></button>
+                                          </div>
+                                      </div>
+                                  ))
+                              )}
                           </div>
                       </div>
                   </div>
@@ -415,11 +532,29 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
                       <button onClick={() => setDetailTab('files')} className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${detailTab === 'files' ? 'border-blue-500 text-blue-500' : 'border-transparent text-slate-400 hover:text-white'}`}>Arquivos OFX</button>
                   </div>
 
-                  <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center gap-4">
-                      <span className="text-sm text-slate-400">Filtrar período:</span>
-                      <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-3 py-1 text-sm text-white"/>
-                      <span className="text-slate-500">até</span>
-                      <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-3 py-1 text-sm text-white"/>
+                  <div className="p-4 bg-slate-900 border-b border-slate-800 flex justify-between items-center gap-4">
+                      <div className="flex items-center gap-4">
+                          <span className="text-sm text-slate-400">Filtrar período:</span>
+                          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-3 py-1 text-sm text-white"/>
+                          <span className="text-slate-500">até</span>
+                          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-3 py-1 text-sm text-white"/>
+                      </div>
+                      {detailTab === 'transactions' && (
+                          <div className="flex gap-2">
+                              <button 
+                                onClick={handleExportExcel}
+                                className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600/10 border border-emerald-600/20 text-emerald-500 rounded-lg hover:bg-emerald-600/20 text-sm font-medium"
+                              >
+                                  <FileSpreadsheet size={16}/> Baixar Excel
+                              </button>
+                              <button 
+                                onClick={handlePrintReport} 
+                                className="flex items-center gap-2 px-4 py-1.5 bg-slate-800 border border-slate-700 text-slate-200 rounded-lg hover:bg-slate-700 text-sm"
+                              >
+                                  <Printer size={16}/> Imprimir / PDF
+                              </button>
+                          </div>
+                      )}
                   </div>
 
                   <div className="flex-1 overflow-auto p-6 bg-slate-950">
