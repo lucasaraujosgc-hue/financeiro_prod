@@ -26,10 +26,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
   const [editingBankId, setEditingBankId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const getHeaders = () => ({
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${localStorage.getItem('finance_app_token')}`
-  });
+  // CORREÇÃO: Usar o Token JWT do localStorage
+  const getHeaders = () => {
+      const token = localStorage.getItem('finance_app_token');
+      return {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+      };
+  };
 
   useEffect(() => { fetchStats(); }, []);
   
