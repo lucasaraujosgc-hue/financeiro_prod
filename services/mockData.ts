@@ -35,34 +35,7 @@ export const INITIAL_CATEGORIES: Category[] = [
     { id: 8, name: 'Transferências Internas', type: CategoryType.INCOME, groupType: 'nao_operacional' },
     { id: 9, name: 'Aportes de Sócios / Investimentos', type: CategoryType.INCOME, groupType: 'nao_operacional' },
     { id: 10, name: 'Outras Receitas Operacionais', type: CategoryType.INCOME, groupType: 'outras_receitas' },
-    { id: 11, name: 'Venda de Ativo Imobilizado', type: CategoryType.INCOME, groupType: 'receita_nao_operacional' },
-    
-    // DESPESAS
-    { id: 12, name: 'Compra de Mercadorias', type: CategoryType.EXPENSE, groupType: 'cmv' },
-    { id: 13, name: 'Matéria-Prima', type: CategoryType.EXPENSE, groupType: 'cmv' },
-    { id: 14, name: 'Fretes sobre Compras', type: CategoryType.EXPENSE, groupType: 'cmv' },
-    { id: 15, name: 'Embalagens', type: CategoryType.EXPENSE, groupType: 'cmv' },
-    { id: 16, name: 'Salários e Ordenados', type: CategoryType.EXPENSE, groupType: 'despesa_pessoal' },
-    { id: 17, name: 'Pró-Labore', type: CategoryType.EXPENSE, groupType: 'despesa_pessoal' },
-    { id: 18, name: 'Vale Transporte / Alimentação', type: CategoryType.EXPENSE, groupType: 'despesa_pessoal' },
-    { id: 19, name: 'Encargos Sociais (FGTS/INSS)', type: CategoryType.EXPENSE, groupType: 'despesa_pessoal' },
-    { id: 20, name: 'Aluguel e Condomínio', type: CategoryType.EXPENSE, groupType: 'despesa_administrativa' },
-    { id: 21, name: 'Energia / Água / Telefone', type: CategoryType.EXPENSE, groupType: 'despesa_administrativa' },
-    { id: 22, name: 'Internet e Sistemas', type: CategoryType.EXPENSE, groupType: 'despesa_administrativa' },
-    { id: 23, name: 'Material de Escritório/Limpeza', type: CategoryType.EXPENSE, groupType: 'despesa_administrativa' },
-    { id: 24, name: 'Contabilidade e Jurídico', type: CategoryType.EXPENSE, groupType: 'despesa_administrativa' },
-    { id: 25, name: 'Marketing e Publicidade', type: CategoryType.EXPENSE, groupType: 'despesa_operacional' },
-    { id: 26, name: 'Comissões de Vendas', type: CategoryType.EXPENSE, groupType: 'despesa_operacional' },
-    { id: 27, name: 'Combustível e Viagens', type: CategoryType.EXPENSE, groupType: 'despesa_operacional' },
-    { id: 28, name: 'DAS - Simples Nacional', type: CategoryType.EXPENSE, groupType: 'impostos' },
-    { id: 29, name: 'ICMS / ISS a Recolher', type: CategoryType.EXPENSE, groupType: 'impostos' },
-    { id: 30, name: 'Taxas e Alvarás', type: CategoryType.EXPENSE, groupType: 'impostos' },
-    { id: 31, name: 'Tarifas Bancárias', type: CategoryType.EXPENSE, groupType: 'despesa_financeira' },
-    { id: 32, name: 'Juros Pagos', type: CategoryType.EXPENSE, groupType: 'despesa_financeira' },
-    { id: 33, name: 'Antecipação de Recebíveis', type: CategoryType.EXPENSE, groupType: 'despesa_financeira' },
-    { id: 34, name: 'Distribuição de Lucros', type: CategoryType.EXPENSE, groupType: 'nao_operacional' },
-    { id: 35, name: 'Empréstimos (Pagamento Principal)', type: CategoryType.EXPENSE, groupType: 'nao_operacional' },
-    { id: 36, name: 'Transferência entre Contas', type: CategoryType.EXPENSE, groupType: 'nao_operacional' }
+    { id: 11, name: 'Venda de Ativo Imobilizado', type: CategoryType.INCOME, groupType: 'receita_nao_operacional' }
 ];
 
 export const INITIAL_TRANSACTIONS: Transaction[] = [];
