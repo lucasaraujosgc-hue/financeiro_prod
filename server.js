@@ -17,25 +17,20 @@ import https from 'https';
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
 
 // Chave de 32 bytes para AES-256. 
-// Lógica robusta: Se a chave fornecida não tiver 32 bytes, fazemos um hash SHA-256 dela para garantir o tamanho.
 let keyBuffer;
 if (process.env.ENCRYPTION_KEY) {
-    // Tenta interpretar como hex
     keyBuffer = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
-    // Se não tiver exatamente 32 bytes, usa o hash da string original
     if (keyBuffer.length !== 32) {
-        console.warn("Aviso: ENCRYPTION_KEY fornecida não tem 32 bytes (64 caracteres hex). Usando SHA-256 da chave para garantir compatibilidade.");
+        console.warn("Aviso: ENCRYPTION_KEY fornecida não tem 32 bytes. Usando SHA-256.");
         keyBuffer = crypto.createHash('sha256').update(String(process.env.ENCRYPTION_KEY)).digest();
     }
 } else {
-    // Se não fornecida, gera uma aleatória (dados criptografados serão perdidos ao reiniciar se não persistir no .env)
     keyBuffer = crypto.randomBytes(32);
 }
 const ENCRYPTION_KEY = keyBuffer;
 const IV_LENGTH = 16; 
 
 // --- FUNÇÕES DE CRIPTOGRAFIA (AES-256-CBC) ---
-// Usado para: CNPJ, Telefone, Conta Bancária, Conteúdo OFX
 function encrypt(text) {
     if (!text) return text;
     try {
@@ -61,7 +56,7 @@ function decrypt(text) {
         decrypted = Buffer.concat([decrypted, decipher.final()]);
         return decrypted.toString();
     } catch (e) {
-        return text; // Retorna original se falhar (fallback)
+        return text; 
     }
 }
 
@@ -69,7 +64,6 @@ function decrypt(text) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Garante que a pasta logo local exista
 const LOCAL_LOGO_DIR = path.join(__dirname, 'logo');
 if (!fs.existsSync(LOCAL_LOGO_DIR)){
     fs.mkdirSync(LOCAL_LOGO_DIR, { recursive: true });
@@ -78,10 +72,8 @@ if (!fs.existsSync(LOCAL_LOGO_DIR)){
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuração para Proxy (Render, Heroku, AWS, Nginx)
 app.set('trust proxy', 1);
 
-// --- MIDDLEWARES DE SEGURANÇA ---
 app.use(helmet({
     contentSecurityPolicy: false, 
     crossOriginEmbedderPolicy: false
@@ -89,8 +81,6 @@ app.use(helmet({
 app.use(cors()); 
 app.use(express.json({ limit: '10mb' }));
 
-// Middleware para forçar HTTPS em Produção (se estiver atrás de um proxy/Load Balancer)
-// Se tiver certificados locais, o startServer no final cuidará disso.
 app.use((req, res, next) => {
     if (process.env.NODE_ENV === 'production' && !process.env.SSL_KEY_PATH) {
         const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
@@ -101,9 +91,8 @@ app.use((req, res, next) => {
     next();
 });
 
-// Rate Limiting (Proteção contra Brute Force/DDoS simples)
 const apiLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutos
+	windowMs: 15 * 60 * 1000, 
 	limit: 300, 
 	standardHeaders: 'draft-7',
 	legacyHeaders: false,
@@ -111,14 +100,12 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-// Servir arquivos do frontend (build)
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// --- DATABASE & STORAGE SETUP (ROBUSTO - Mantido do Original) ---
+// --- DATABASE & STORAGE SETUP ---
 const BACKUP_DIR = '/backup';
 let PERSISTENT_LOGO_DIR = path.join(__dirname, 'backup_logos_fallback'); 
 
-// 1. Tenta configurar diretório de backup
 try {
     if (!fs.existsSync(BACKUP_DIR)) {
         try {
@@ -133,7 +120,6 @@ try {
     console.error("Aviso: Erro ao configurar diretórios de backup:", e.message);
 }
 
-// 2. Configura diretório de logos persistente
 if (fs.existsSync(BACKUP_DIR)) {
     try {
         fs.accessSync(BACKUP_DIR, fs.constants.W_OK);
@@ -151,7 +137,6 @@ if (!fs.existsSync(PERSISTENT_LOGO_DIR)) {
 
 console.log(`Logos persistentes em: ${PERSISTENT_LOGO_DIR}`);
 
-// 3. Define caminho do banco
 let dbPath = './backup/finance_v2.db'; 
 if (fs.existsSync(BACKUP_DIR)) {
     try {
@@ -164,7 +149,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
     if (err) console.error("ERRO CRÍTICO AO ABRIR BANCO DE DADOS:", err.message);
     else {
         console.log(`Banco de dados conectado em: ${dbPath}`);
-        db.run('PRAGMA journal_mode = WAL;'); // Melhor performance e concorrência
+        db.run('PRAGMA journal_mode = WAL;'); 
     }
 });
 
@@ -179,7 +164,7 @@ app.use('/logo', (req, res, next) => {
 });
 app.use('/logo', express.static(LOCAL_LOGO_DIR));
 
-// --- AUDITORIA (NOVO) ---
+// --- AUDITORIA ---
 function logAudit(userId, action, details, ip) {
     const timestamp = new Date().toISOString();
     db.run(
@@ -189,8 +174,7 @@ function logAudit(userId, action, details, ip) {
     );
 }
 
-// --- MIDDLEWARES DE AUTENTICAÇÃO (JWT) ---
-// Substitui o checkAuth original para usar Tokens Seguros
+// --- MIDDLEWARES ---
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -200,13 +184,12 @@ const authenticateToken = (req, res, next) => {
     jwt.verify(token, JWT_SECRET, (err, decoded) => {
         if (err) return res.status(403).json({ error: "Sessão expirada." });
         req.user = decoded; 
-        req.userId = decoded.id; // Mantém compatibilidade com o código original que usa req.userId
+        req.userId = decoded.id; 
         next();
     });
 };
 
 const checkAdmin = (req, res, next) => {
-    // Requer authenticateToken antes
     if (req.user.role !== 'admin') {
         logAudit(req.userId, 'UNAUTHORIZED_ADMIN_ACCESS', 'Tentativa de acesso admin', req.ip);
         return res.status(403).json({ error: "Acesso negado: Apenas administradores." });
@@ -246,14 +229,11 @@ const sendEmail = async (to, subject, htmlContent) => {
       return true;
   } catch (error) {
       console.error(`[EMAIL] Erro FATAL ao enviar para ${to}:`, error.message);
-      if (error.code === 'EAUTH') {
-          console.error("DICA: Verifique se o e-mail e senha no .env estão corretos. Se for Gmail, use uma 'Senha de App'.");
-      }
       return false;
   }
 };
 
-// --- DATA SEEDING & MIGRATIONS --- 
+// --- SEEDS & MIGRATIONS --- 
 const INITIAL_BANKS_SEED = [
   { name: 'Nubank', logo: '/logo/nubank.jpg' },
   { name: 'Itaú', logo: '/logo/itau.png' },
@@ -342,11 +322,10 @@ db.serialize(() => {
       if (!err) ensureColumn('keyword_rules', 'bank_id', 'INTEGER');
   });
 
-  // Tabela de Auditoria (NOVO)
   db.run(`CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, action TEXT, details TEXT, ip_address TEXT, created_at TEXT)`);
 });
 
-// --- ROTA PÚBLICA DE DADOS ---
+// --- ROTA PÚBLICA ---
 app.get('/api/global-banks', (req, res) => {
     db.all('SELECT * FROM global_banks ORDER BY name ASC', [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -354,11 +333,10 @@ app.get('/api/global-banks', (req, res) => {
     });
 });
 
-// --- ROTAS DE AUTENTICAÇÃO ---
+// --- AUTH ROUTES ---
 app.post('/api/login', (req, res) => {
   const { email, password } = req.body;
   
-  // Admin Hardcoded
   if (email === process.env.MAIL_ADMIN && password === process.env.PASSWORD_ADMIN) {
       const token = jwt.sign({ id: 'admin', role: 'admin', email }, JWT_SECRET, { expiresIn: '12h' });
       logAudit('admin', 'LOGIN', 'Admin login successful', req.ip);
@@ -379,7 +357,7 @@ app.post('/api/login', (req, res) => {
     if (row.password && row.password.startsWith('$2')) {
         isValid = await bcrypt.compare(password, row.password);
     } else {
-        isValid = row.password === password; // Legacy fallback
+        isValid = row.password === password; 
     }
 
     if (!isValid) {
@@ -387,7 +365,6 @@ app.post('/api/login', (req, res) => {
         return res.status(401).json({ error: 'Credenciais inválidas.' });
     }
 
-    // Gera o Token
     const token = jwt.sign({ id: row.id, role: 'user', email: row.email }, JWT_SECRET, { expiresIn: '12h' });
     logAudit(row.id, 'LOGIN', 'User login successful', req.ip);
     
@@ -405,7 +382,6 @@ app.post('/api/request-signup', (req, res) => {
         
         const token = crypto.randomBytes(32).toString('hex');
         const createdAt = Date.now();
-        // Criptografar dados sensíveis (LGPD)
         const encCnpj = encrypt(cnpj);
         const encPhone = encrypt(phone);
 
@@ -434,13 +410,7 @@ app.post('/api/request-signup', (req, res) => {
                     </div>
                 </div>
                 `;
-                
-                // LOG IMPORTANTE: Exibe o link no console para testes locais ou falha de email
-                console.log('--- LINK DE ATIVAÇÃO DE CONTA ---');
-                console.log(`Para: ${email}`);
-                console.log(`Link: ${link}`);
-                console.log('---------------------------------');
-
+                console.log(`[LINK ATIVAÇÃO] ${link}`);
                 await sendEmail(email, "Ative sua conta - Virgula Contábil", html);
                 logAudit('system', 'SIGNUP_REQUEST', email, req.ip);
                 res.json({ message: "Link de cadastro enviado." });
@@ -459,18 +429,16 @@ app.post('/api/complete-signup', (req, res) => {
 
       db.run(
         `INSERT INTO users (email, password, cnpj, razao_social, phone) VALUES (?, ?, ?, ?, ?)`,
-        [pendingUser.email, hashedPassword, pendingUser.cnpj, pendingUser.razao_social, pendingUser.phone], // Já criptografados na pendência
+        [pendingUser.email, hashedPassword, pendingUser.cnpj, pendingUser.razao_social, pendingUser.phone],
         async function(err) {
           if (err) return res.status(500).json({ error: err.message });
           const newUserId = this.lastID;
           db.run('DELETE FROM pending_signups WHERE email = ?', [pendingUser.email]);
           
-          // Seed from global banks
           db.all('SELECT * FROM global_banks', [], (err, globalBanks) => {
               if (!err && globalBanks.length > 0) {
                   const bankStmt = db.prepare("INSERT INTO banks (user_id, name, account_number, nickname, logo, active, balance) VALUES (?, ?, ?, ?, ?, ?, ?)");
                   globalBanks.forEach(b => {
-                      // Default values for new user copy (criptografando numero conta 0000-0)
                       bankStmt.run(newUserId, b.name, encrypt('0000-0'), b.name, b.logo, 0, 0);
                   });
                   bankStmt.finalize();
@@ -508,13 +476,7 @@ app.post('/api/recover-password', (req, res) => {
             const origin = req.headers.origin || 'https://seu-app.com';
             const link = `${origin}/?action=reset&token=${token}`;
             const resetHtml = `... (HTML de Recuperação) ... <a href="${link}">Link</a>`;
-            
-            // LOG IMPORTANTE: Exibe o link no console
-            console.log('--- LINK DE RECUPERAÇÃO DE SENHA ---');
-            console.log(`Para: ${email}`);
-            console.log(`Link: ${link}`);
-            console.log('------------------------------------');
-
+            console.log(`[LINK RECUPERAÇÃO] ${link}`);
             await sendEmail(email, "Recuperação de Senha - Virgula Contábil", resetHtml);
             res.json({ message: 'Email de recuperação enviado.' });
         });
@@ -536,7 +498,7 @@ app.post('/api/reset-password-confirm', (req, res) => {
     });
 });
 
-// --- ADMIN ROUTES (Protected by authenticateToken + checkAdmin) ---
+// --- ADMIN ROUTES ---
 app.use('/api/admin', authenticateToken, checkAdmin);
 
 app.get('/api/admin/banks', (req, res) => {
@@ -556,15 +518,12 @@ app.post('/api/admin/banks', async (req, res) => {
             const matches = logoData.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
             if (matches && matches.length === 3) {
                 const extension = matches[1].includes('+') ? matches[1].split('+')[0] : matches[1]; 
-                const base64Data = matches[2];
                 const fileName = `bank_${Date.now()}.${extension.replace('jpeg','jpg')}`;
                 const filePath = path.join(PERSISTENT_LOGO_DIR, fileName);
-                fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+                fs.writeFileSync(filePath, Buffer.from(matches[2], 'base64'));
                 logoPath = `/logo/${fileName}`;
             }
-        } catch (e) {
-            console.error("Error saving logo:", e);
-        }
+        } catch (e) { console.error("Error saving logo:", e); }
     } else if (logoData && typeof logoData === 'string' && logoData.startsWith('/logo/')) {
         logoPath = logoData;
     }
@@ -600,7 +559,7 @@ app.put('/api/admin/banks/:id', (req, res) => {
 
         db.run('UPDATE global_banks SET name = ?, logo = ? WHERE id = ?', [name, logoPath, id], function(err) {
             if (err) return res.status(500).json({ error: err.message });
-            db.run('UPDATE banks SET name = ?, logo = ? WHERE name = ?', [name, logoPath, oldName]); // Propagate
+            db.run('UPDATE banks SET name = ?, logo = ? WHERE name = ?', [name, logoPath, oldName]); 
             res.json({ id, name, logo: logoPath });
         });
     });
@@ -616,7 +575,6 @@ app.delete('/api/admin/banks/:id', (req, res) => {
 app.get('/api/admin/users', (req, res) => {
     db.all('SELECT id, email, cnpj, razao_social, phone FROM users', [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        // Decrypt sensitive info for admin
         const decrypted = rows.map(u => ({...u, cnpj: decrypt(u.cnpj), phone: decrypt(u.phone)}));
         res.json(decrypted);
     });
@@ -644,7 +602,7 @@ app.get('/api/admin/users/:id/full-data', async (req, res) => {
 app.get('/api/admin/ofx-download/:id', (req, res) => {
     db.get('SELECT file_name, content FROM ofx_imports WHERE id = ?', [req.params.id], (err, row) => {
         if (err || !row) return res.status(404).json({ error: "Arquivo não encontrado" });
-        const decryptedContent = decrypt(row.content); // DECRYPT CONTENT
+        const decryptedContent = decrypt(row.content); 
         logAudit(req.user.id, 'ADMIN_DOWNLOAD_OFX', req.params.id, req.ip);
         res.setHeader('Content-Disposition', `attachment; filename="${row.file_name}"`);
         res.setHeader('Content-Type', 'application/x-ofx');
@@ -683,7 +641,7 @@ app.get('/api/admin/audit-transactions', (req, res) => {
     });
 });
 
-// --- USER ROUTES (Protected by authenticateToken) ---
+// --- USER ROUTES ---
 app.use('/api', authenticateToken);
 
 app.get('/api/banks', (req, res) => {
@@ -691,7 +649,7 @@ app.get('/api/banks', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows.map(b => ({
             ...b,
-            accountNumber: decrypt(b.account_number), // Decrypt on read
+            accountNumber: decrypt(b.account_number),
             active: Boolean(b.active)
         })));
     });
@@ -699,7 +657,7 @@ app.get('/api/banks', (req, res) => {
 
 app.post('/api/banks', (req, res) => {
     const { name, accountNumber, nickname, logo } = req.body;
-    const encAccount = encrypt(accountNumber); // Encrypt on write
+    const encAccount = encrypt(accountNumber); 
     db.run(
         `INSERT INTO banks (user_id, name, account_number, nickname, logo, active, balance) VALUES (?, ?, ?, ?, ?, 1, 0)`,
         [req.userId, name, encAccount, nickname, logo],
@@ -855,7 +813,15 @@ app.patch('/api/transactions/batch-update', (req, res) => {
 app.get('/api/ofx-imports', (req, res) => {
     db.all(`SELECT id, file_name, import_date, bank_id, transaction_count FROM ofx_imports WHERE user_id = ? ORDER BY import_date DESC`, [req.userId], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+        // Mapear para camelCase para o frontend
+        const mapped = rows.map(r => ({
+            id: r.id,
+            fileName: r.file_name,
+            importDate: r.import_date,
+            bankId: r.bank_id,
+            transactionCount: r.transaction_count
+        }));
+        res.json(mapped);
     });
 });
 
@@ -863,7 +829,7 @@ app.post('/api/ofx-imports', (req, res) => {
     const { fileName, importDate, bankId, transactionCount, content } = req.body;
     if (content.length > 5 * 1024 * 1024) return res.status(400).json({ error: "Arquivo muito grande." });
     
-    const encContent = encrypt(content); // Encrypt content
+    const encContent = encrypt(content); 
     db.run(
         `INSERT INTO ofx_imports (user_id, file_name, import_date, bank_id, transaction_count, content) VALUES (?, ?, ?, ?, ?, ?)`,
         [req.userId, fileName, importDate, bankId, transactionCount, encContent],
@@ -1225,7 +1191,6 @@ app.get('/api/reports/analysis', (req, res) => {
                 totalDespesas += r.value;
             }
 
-            // DRE Logic Copy
             const cat = (r.category_name || '').toLowerCase();
             const val = r.value;
             const isCredit = r.type === 'credito';
@@ -1347,7 +1312,6 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-// --- BACKUP ---
 setInterval(() => {
     const date = new Date().toISOString().split('T')[0];
     const backupFile = path.join(BACKUP_DIR, `backup_${date}.db`);
@@ -1356,7 +1320,6 @@ setInterval(() => {
     }
 }, 86400000);
 
-// --- START SERVER (HTTPS / HTTP) ---
 const startServer = () => {
     const sslKeyPath = process.env.SSL_KEY_PATH;
     const sslCertPath = process.env.SSL_CERT_PATH;

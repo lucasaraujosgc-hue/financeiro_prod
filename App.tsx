@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Transactions from './components/Transactions';
@@ -65,17 +65,23 @@ function App() {
     }
   }, [isAuthenticated, token, user]);
 
-  useEffect(() => {
-    if (banks.length > 0) {
-        const updatedBanks = banks.map(bank => {
-            const bankTxs = transactions.filter(t => t.bankId === bank.id);
-            const balance = bankTxs.reduce((acc, t) => t.type === 'credito' ? acc + t.value : acc - t.value, 0);
-            return { ...bank, balance };
-        });
-        const hasChanged = updatedBanks.some((b, i) => b.balance !== banks[i].balance);
-        if (hasChanged) setBanks(updatedBanks);
-    }
-  }, [transactions.length, banks.length]); 
+  // CÁLCULO DE SALDO DINÂMICO (CORREÇÃO DE SALDO ATUAL)
+  // Calcula o saldo de cada banco com base nas transações carregadas
+  const banksWithBalance = useMemo(() => {
+      return banks.map(bank => {
+          const bankTxs = transactions.filter(t => t.bankId === bank.id);
+          // Calcula saldo com base em TODAS as transações (não apenas conciliadas, conforme padrão usual de "Book Balance")
+          // Se quiser apenas conciliadas, adicione && t.reconciled no filter acima
+          const balance = bankTxs.reduce((acc, t) => {
+              const val = Math.abs(t.value);
+              // Verifica string de tipo para ser robusto
+              const isCredit = t.type === 'credito' || String(t.type).toLowerCase().includes('receita');
+              return isCredit ? acc + val : acc - val;
+          }, 0);
+          
+          return { ...bank, balance };
+      });
+  }, [banks, transactions]);
 
   // JWT Helper
   const apiFetch = async (url: string, options: RequestInit = {}) => {
@@ -225,7 +231,9 @@ function App() {
 
   if (user?.role === 'admin') return <AdminPanel onLogout={handleLogout} />;
 
-  const activeBanks = banks.filter(b => b.active);
+  // Filtrar bancos ativos para a UI principal (BankList receberá todos para poder gerenciar arquivados)
+  // Mas BankList usa a prop "banks" que agora deve ser "banksWithBalance" para mostrar o saldo correto
+  const activeBanks = banksWithBalance.filter(b => b.active);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -233,7 +241,7 @@ function App() {
       case 'transactions': return <Transactions userId={user.id} transactions={transactions} banks={activeBanks} categories={categories} onAddTransaction={handleAddTransaction} onEditTransaction={handleEditTransaction} onDeleteTransaction={handleDeleteTransaction} onReconcile={handleReconcile} onBatchUpdate={handleBatchUpdateTransaction} />;
       case 'import': return <OFXImports userId={user.id} banks={activeBanks} keywordRules={keywordRules} transactions={transactions} onTransactionsImported={fetchInitialData} />;
       case 'rules': return <KeywordRules categories={categories} rules={keywordRules} banks={activeBanks} onAddRule={handleAddKeywordRule} onDeleteRule={handleDeleteKeywordRule} />;
-      case 'banks': return <BankList banks={banks} onUpdateBank={handleUpdateBank} onAddBank={handleAddBank} onDeleteBank={handleDeleteBank} />;
+      case 'banks': return <BankList banks={banksWithBalance} onUpdateBank={handleUpdateBank} onAddBank={handleAddBank} onDeleteBank={handleDeleteBank} />;
       case 'categories': return <Categories categories={categories} onAddCategory={handleAddCategory} onDeleteCategory={handleDeleteCategory} />;
       case 'reports': return <Reports transactions={transactions} categories={categories} />;
       case 'forecasts': return <Forecasts userId={user.id} banks={activeBanks} categories={categories} onUpdate={fetchInitialData} />;

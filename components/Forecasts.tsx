@@ -33,10 +33,13 @@ const Forecasts: React.FC<ForecastsProps> = ({ userId, banks, categories, onUpda
 
   const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
-  const getHeaders = () => ({
-      'Content-Type': 'application/json',
-      'user-id': String(userId)
-  });
+  const getHeaders = () => {
+      const token = localStorage.getItem('finance_app_token');
+      return {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+      };
+  };
 
   useEffect(() => {
     fetchForecasts();
