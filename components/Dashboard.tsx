@@ -40,7 +40,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
   const startOfSelectedMonth = new Date(currentYear, currentMonth, 1);
   const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
-  // Mantendo a segurança JWT configurada no server.js
   const getHeaders = () => ({
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${localStorage.getItem('finance_app_token')}`
@@ -72,10 +71,30 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
       return fDateMidnight < startOfSelectedMonth && !f.realized;
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const overdueIncome = overdueForecasts.filter(f => f.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
-  const overdueExpense = overdueForecasts.filter(f => f.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
+  // Lógica de cálculo corrigida
+  const calculateProjectedBalance = (bank: Bank) => {
+      // 1. Saldo Atual (Já vem do App.tsx como apenas conciliado)
+      let projected = bank.balance;
 
-  const allPendingForecasts = forecasts.filter(f => !f.realized);
+      // 2. Adicionar Lançamentos Pendentes (Transações existentes mas não conciliadas)
+      const pendingTransactions = transactions.filter(t => t.bankId === bank.id && !t.reconciled);
+      pendingTransactions.forEach(t => {
+          const val = Math.abs(t.value);
+          const isCredit = t.type === TransactionType.CREDIT;
+          projected += isCredit ? val : -val;
+      });
+
+      // 3. Adicionar Previsões Futuras (Forecasts não realizados)
+      // Considerando todas as previsões futuras cadastradas (ou filtrar por mês se desejado)
+      const bankForecasts = forecasts.filter(f => f.bankId === bank.id && !f.realized);
+      bankForecasts.forEach(f => {
+          const val = Math.abs(f.value);
+          const isCredit = f.type === TransactionType.CREDIT;
+          projected += isCredit ? val : -val;
+      });
+
+      return projected;
+  };
 
   const currentMonthTransactions = transactions.filter(t => {
       const d = new Date(t.date);
@@ -86,7 +105,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
       .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 5);
 
-  // Calculate Category Analysis
   const getTopCategories = (type: TransactionType) => {
       const filtered = currentMonthTransactions.filter(t => t.type === type);
       const total = filtered.reduce((acc, t) => acc + t.value, 0);
@@ -105,18 +123,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
               percent: total > 0 ? (Number(value) / total) * 100 : 0 
           }))
           .sort((a, b) => b.value - a.value)
-          .slice(0, 4); // Top 4 categories
+          .slice(0, 4);
   };
 
   const topIncomeCategories = getTopCategories(TransactionType.CREDIT);
   const topExpenseCategories = getTopCategories(TransactionType.DEBIT);
 
-  const allTimeIncome = transactions.filter(t => t.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
-  const allTimeExpense = transactions.filter(t => t.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
+  const allTimeIncome = transactions.filter(t => t.reconciled && t.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
+  const allTimeExpense = transactions.filter(t => t.reconciled && t.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
   const totalBalance = allTimeIncome - allTimeExpense;
 
-  const monthRealizedIncome = currentMonthTransactions.filter(t => t.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
-  const monthRealizedExpense = currentMonthTransactions.filter(t => t.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
+  const monthRealizedIncome = currentMonthTransactions.filter(t => t.reconciled && t.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
+  const monthRealizedExpense = currentMonthTransactions.filter(t => t.reconciled && t.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
 
   const currentMonthForecasts = forecasts.filter(f => {
       const d = new Date(f.date);
@@ -125,10 +143,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
 
   const monthForecastIncome = currentMonthForecasts.filter(f => f.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
   const monthForecastExpense = currentMonthForecasts.filter(f => f.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
-  const reconciledCount = transactions.filter(t => t.reconciled).length;
-  const pendingCount = transactions.filter(t => !t.reconciled).length;
 
-  // Chart Data
   const chartData = [
       { name: 'Receita', value: monthRealizedIncome },
       { name: 'Despesa', value: monthRealizedExpense },
@@ -248,7 +263,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
   return (
     <div className="space-y-4 pb-4">
       
-      {/* Overdue Alert Banner */}
       {overdueForecasts.length > 0 && (
           <div onClick={() => setIsOverdueModalOpen(true)} className="bg-amber-950/40 border border-amber-500/30 p-3 rounded-xl cursor-pointer hover:bg-amber-900/40 transition-all group">
               <div className="flex items-center justify-between">
@@ -266,7 +280,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
           </div>
       )}
 
-      {/* Header with Navigation */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-3">
         <div>
             <div className="flex items-center gap-2 mb-0.5">
@@ -292,7 +305,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
             <div className="relative z-10">
                 <p className="text-slate-400 text-xs font-medium mb-1">Saldo Atual</p>
                 <h2 className="text-2xl font-bold text-white mb-1">R$ {totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
-                <p className="text-[10px] text-slate-500">Apenas lançamentos efetivados</p>
+                <p className="text-[10px] text-slate-500">Apenas lançamentos conciliados</p>
             </div>
         </div>
 
@@ -302,7 +315,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
                 <CheckCircle2 size={48} className="text-emerald-500"/>
             </div>
             <div className="relative z-10">
-                <p className="text-emerald-500 text-xs font-medium mb-1 flex items-center gap-1"><TrendingUp size={14}/> Receitas</p>
+                <p className="text-emerald-500 text-xs font-medium mb-1 flex items-center gap-1"><TrendingUp size={14}/> Receitas Realizadas</p>
                 <h2 className="text-2xl font-bold text-emerald-400 mb-1">R$ {monthRealizedIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
                 <p className="text-[10px] text-slate-500">Previsto: <span className="text-emerald-500/70">+ R$ {monthForecastIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></p>
             </div>
@@ -314,7 +327,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
                 <ShieldCheck size={48} className="text-rose-500"/>
             </div>
             <div className="relative z-10">
-                <p className="text-rose-500 text-xs font-medium mb-1 flex items-center gap-1"><TrendingDown size={14}/> Despesas</p>
+                <p className="text-rose-500 text-xs font-medium mb-1 flex items-center gap-1"><TrendingDown size={14}/> Despesas Realizadas</p>
                 <h2 className="text-2xl font-bold text-rose-400 mb-1">R$ {monthRealizedExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
                 <p className="text-[10px] text-slate-500">Previsto: <span className="text-rose-500/70">+ R$ {monthForecastExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></p>
             </div>
@@ -324,45 +337,41 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
       {/* Middle Row: Banks & Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         
-        {/* Bank Balances */}
-        <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col">
+        {/* Bank Balances - REDESIGNED */}
+        <div className="bg-surface p-5 rounded-xl border border-slate-800 flex flex-col">
              <h3 className="font-bold text-white mb-4 text-xs uppercase tracking-wider text-slate-400">Saldos por Banco</h3>
-             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto max-h-[300px] custom-scroll pr-1">
                 {banks.filter(b => b.active).map(bank => {
-                    const bankPendingForecasts = allPendingForecasts.filter(f => f.bankId === bank.id);
-                    const pendingTotal = bankPendingForecasts.reduce((acc, f) => {
-                        const val = Number(f.value);
-                        const type = String(f.type).toLowerCase();
-                        if (type.includes('credit') || type.includes('receita')) return acc + val;
-                        if (type.includes('debit') || type.includes('despesa')) return acc - val;
-                        return acc;
-                    }, 0);
-                    const projectedBalance = bank.balance + pendingTotal;
-
+                    const projectedBalance = calculateProjectedBalance(bank);
                     return (
                         <div 
                             key={bank.id} 
                             onClick={() => setSelectedBankForForecasts(bank.id)}
-                            className="p-3 rounded-lg border border-slate-800 bg-black/20 hover:bg-slate-800/50 transition-all cursor-pointer group"
+                            className="bg-slate-950 p-4 rounded-xl border border-slate-800/60 hover:border-slate-700 transition-all cursor-pointer group shadow-sm relative overflow-hidden"
                         >
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="w-8 h-8 rounded-md bg-white p-1 flex items-center justify-center overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"/>
+                            
+                            <div className="flex items-center gap-3 mb-4 relative z-10">
+                                <div className="w-10 h-10 rounded-lg bg-white p-1.5 flex items-center justify-center overflow-hidden shadow-sm">
                                     <img src={bank.logo} alt={bank.name} className="max-w-full max-h-full object-contain" />
                                 </div>
-                                <div>
-                                    <h4 className="font-bold text-slate-200 text-xs">{bank.name}</h4>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-slate-200 text-sm truncate">{bank.name}</h4>
+                                    <p className="text-[10px] text-slate-500 truncate">{bank.nickname}</p>
                                 </div>
                             </div>
-                            <div className="space-y-1">
-                                <div className="flex justify-between items-center text-[10px]">
-                                    <span className="text-slate-500">Atual</span>
-                                    <span className={bank.balance >= 0 ? 'text-emerald-500 font-bold' : 'text-rose-500 font-bold'}>
+                            
+                            <div className="space-y-2 relative z-10">
+                                <div className="flex justify-between items-end">
+                                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Atual</span>
+                                    <span className={`text-sm font-bold ${bank.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                         R$ {bank.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </span>
                                 </div>
-                                <div className="flex justify-between items-center text-[10px]">
-                                    <span className="text-slate-500">Projetado</span>
-                                    <span className={projectedBalance >= 0 ? 'text-slate-300' : 'text-slate-300'}>
+                                <div className="w-full h-px bg-slate-800/50"></div>
+                                <div className="flex justify-between items-end">
+                                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Projetado</span>
+                                    <span className={`text-sm font-bold ${projectedBalance >= 0 ? 'text-slate-300' : 'text-rose-300'}`}>
                                         R$ {projectedBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </span>
                                 </div>
@@ -499,293 +508,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
               </table>
           </div>
       </div>
-
-       {isOverdueModalOpen && (
-         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setIsOverdueModalOpen(false)} />
-            <div className="relative bg-surface border border-amber-500/30 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                <div className="px-6 py-4 border-b border-amber-500/20 bg-amber-950/30 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
-                            <CalendarClock size={20}/>
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-white">Pendências Anteriores</h3>
-                            <p className="text-xs text-amber-200/70">Itens previstos até o mês passado não realizados</p>
-                        </div>
-                    </div>
-                    <button onClick={() => setIsOverdueModalOpen(false)}><X size={20} className="text-slate-400 hover:text-white"/></button>
-                </div>
-                
-                <div className="p-6 overflow-y-auto max-h-[60vh] custom-scroll">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-slate-400 font-medium border-b border-slate-800">
-                            <tr>
-                                <th className="pb-3 pl-2">Data</th>
-                                <th className="pb-3">Descrição</th>
-                                <th className="pb-3 text-right">Valor</th>
-                                <th className="pb-3 text-center">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800">
-                            {overdueForecasts.map(f => (
-                                <tr key={f.id} className="hover:bg-slate-800/30 transition-colors">
-                                    <td className="py-3 pl-2 text-amber-400 font-mono text-xs">
-                                        {new Date(f.date).toLocaleDateString('pt-BR')}
-                                    </td>
-                                    <td className="py-3 font-medium text-slate-200">
-                                        {f.description}
-                                        {f.installmentTotal ? (
-                                            <span className="ml-2 text-xs bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">
-                                                {f.installmentCurrent}/{f.installmentTotal}
-                                            </span>
-                                        ) : null}
-                                    </td>
-                                    <td className={`py-3 text-right font-bold ${f.type === TransactionType.DEBIT ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                        R$ {f.value.toFixed(2)}
-                                    </td>
-                                    <td className="py-3 flex justify-center gap-2">
-                                        <button 
-                                            onClick={() => openRealizeModal(f)}
-                                            className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded hover:bg-emerald-500/20 border border-emerald-500/20"
-                                            title="Efetivar Lançamento"
-                                        >
-                                            <Check size={16}/>
-                                        </button>
-                                        <button 
-                                            onClick={() => handleDeleteForecast(f.id)}
-                                            className="p-1.5 bg-rose-500/10 text-rose-500 rounded hover:bg-rose-500/20 border border-rose-500/20"
-                                            title="Excluir Previsão"
-                                        >
-                                            <Trash2 size={16}/>
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-         </div>
-       )}
-
-       {selectedBankForForecasts && (
-           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-               <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSelectedBankForForecasts(null)} />
-               <div className="relative bg-surface border border-slate-800 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                   <div className="px-6 py-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
-                       <h3 className="font-bold text-white flex items-center gap-2">
-                           <Calculator size={18} className="text-primary"/>
-                           Previsões Pendentes - {banks.find(b => b.id === selectedBankForForecasts)?.name}
-                       </h3>
-                       <button onClick={() => setSelectedBankForForecasts(null)}><X size={20} className="text-slate-400 hover:text-white"/></button>
-                   </div>
-                   <div className="p-6 overflow-y-auto max-h-[60vh] custom-scroll">
-                       {allPendingForecasts.filter(f => f.bankId === selectedBankForForecasts).length === 0 ? (
-                           <div className="text-center text-slate-500 py-8">Nenhuma previsão pendente para este banco.</div>
-                       ) : (
-                           <table className="w-full text-sm text-left">
-                               <thead className="text-slate-400 font-medium border-b border-slate-800">
-                                   <tr>
-                                       <th className="pb-3 pl-2">Data</th>
-                                       <th className="pb-3">Descrição</th>
-                                       <th className="pb-3 text-right">Valor</th>
-                                       <th className="pb-3 text-center">Ações</th>
-                                   </tr>
-                               </thead>
-                               <tbody className="divide-y divide-slate-800">
-                                   {allPendingForecasts
-                                       .filter(f => f.bankId === selectedBankForForecasts)
-                                       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                                       .map(f => (
-                                       <tr key={f.id} className="hover:bg-slate-800/30 transition-colors">
-                                           <td className="py-3 pl-2 text-slate-300 font-mono text-xs">
-                                               {new Date(f.date).toLocaleDateString('pt-BR')}
-                                           </td>
-                                           <td className="py-3 font-medium text-slate-200">
-                                               {f.description}
-                                               {f.installmentTotal ? (
-                                                    <span className="ml-2 text-xs bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">
-                                                        {f.installmentCurrent}/{f.installmentTotal}
-                                                    </span>
-                                                ) : null}
-                                           </td>
-                                           <td className={`py-3 text-right font-bold ${f.type === TransactionType.DEBIT ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                               R$ {f.value.toFixed(2)}
-                                           </td>
-                                           <td className="py-3 flex justify-center gap-2">
-                                               <button 
-                                                   onClick={() => openRealizeModal(f)}
-                                                   className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded hover:bg-emerald-500/20 border border-emerald-500/20"
-                                                   title="Efetivar Lançamento"
-                                               >
-                                                   <Check size={16}/>
-                                               </button>
-                                               <button 
-                                                   onClick={() => handleDeleteForecast(f.id)}
-                                                   className="p-1.5 bg-rose-500/10 text-rose-500 rounded hover:bg-rose-500/20 border border-rose-500/20"
-                                                   title="Excluir Previsão"
-                                               >
-                                                   <Trash2 size={16}/>
-                                               </button>
-                                           </td>
-                                       </tr>
-                                   ))}
-                               </tbody>
-                           </table>
-                       )}
-                   </div>
-               </div>
-           </div>
-       )}
-
-       {/* Realize With Date Modal */}
-       {realizeModal.isOpen && (
-           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-               <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setRealizeModal({ ...realizeModal, isOpen: false })} />
-               <div className="relative bg-surface border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in zoom-in duration-200">
-                   <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                       <Calendar size={20} className="text-emerald-500"/> Confirmar Efetivação
-                   </h3>
-                   <div className="space-y-4">
-                       <div>
-                           <label className="text-xs font-semibold text-slate-500 uppercase">Descrição</label>
-                           <p className="text-white font-medium">{realizeModal.forecast?.description}</p>
-                       </div>
-                       <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase">Valor</label>
-                            <p className={`font-bold ${realizeModal.forecast?.type === TransactionType.DEBIT ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                R$ {realizeModal.forecast?.value.toFixed(2)}
-                            </p>
-                       </div>
-                       <div>
-                           <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">Data da Efetivação</label>
-                           <input 
-                               type="date"
-                               required
-                               className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2 text-white outline-none focus:border-emerald-500"
-                               value={realizeModal.date}
-                               onChange={(e) => setRealizeModal({ ...realizeModal, date: e.target.value })}
-                           />
-                       </div>
-                       <div className="flex gap-3 pt-2">
-                           <button onClick={() => setRealizeModal({ ...realizeModal, isOpen: false })} className="flex-1 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800">Cancelar</button>
-                           <button onClick={confirmRealization} className="flex-1 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 font-medium">Confirmar</button>
-                       </div>
-                   </div>
-               </div>
-           </div>
-       )}
-
-       {/* Quick Add Modal */}
-       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="relative bg-surface border border-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 text-slate-200">
-            <div className={`px-6 py-4 border-b border-slate-800 flex justify-between items-center ${formData.type === TransactionType.CREDIT ? 'bg-emerald-950/30' : 'bg-rose-950/30'}`}>
-              <h3 className={`font-bold ${formData.type === TransactionType.CREDIT ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {formData.type === TransactionType.CREDIT ? 'Nova Receita' : 'Nova Despesa'}
-              </h3>
-              <button onClick={() => setIsModalOpen(false)}><X size={20} className="text-slate-400 hover:text-slate-200"/></button>
-            </div>
-            
-            <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                     <div>
-                         <label className="text-sm text-slate-400 font-medium">Data</label>
-                         <input 
-                            type="date"
-                            className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-primary"
-                            value={formData.date}
-                            onChange={e => setFormData({...formData, date: e.target.value})}
-                         />
-                     </div>
-                     <div>
-                         <label className="text-sm text-slate-400 font-medium">Valor</label>
-                         <input 
-                            type="number" step="0.01" required
-                            className={`w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 font-bold outline-none focus:border-primary ${formData.type === TransactionType.CREDIT ? 'text-emerald-500' : 'text-rose-500'}`}
-                            value={formData.value}
-                            onChange={e => setFormData({...formData, value: e.target.value})}
-                         />
-                     </div>
-                </div>
-                <div>
-                     <label className="text-sm text-slate-400 font-medium">Descrição</label>
-                     <input 
-                        type="text" required
-                        className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-primary"
-                        value={formData.description}
-                        onChange={e => setFormData({...formData, description: e.target.value})}
-                     />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                     <div>
-                         <label className="text-sm text-slate-400 font-medium">Banco</label>
-                         <select 
-                            className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-primary"
-                            value={formData.bankId}
-                            onChange={e => setFormData({...formData, bankId: Number(e.target.value)})}
-                         >
-                             {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                         </select>
-                     </div>
-                     <div>
-                         <label className="text-sm text-slate-400 font-medium">Categoria</label>
-                         <select 
-                            className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-primary"
-                            value={formData.categoryId}
-                            onChange={e => setFormData({...formData, categoryId: Number(e.target.value)})}
-                         >
-                            <option value={0}>Selecione...</option>
-                             {availableCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                         </select>
-                     </div>
-                </div>
-
-                <div className="bg-slate-900 p-3 rounded-lg border border-slate-800">
-                    <label className="text-xs font-semibold text-slate-500 mb-2 block flex items-center gap-2">
-                        <Repeat size={12}/> RECORRÊNCIA (OPCIONAL)
-                    </label>
-                    <div className="flex items-center gap-4 mb-2">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input 
-                                type="checkbox"
-                                checked={formData.isFixed}
-                                onChange={e => setFormData({...formData, isFixed: e.target.checked})}
-                                className="w-4 h-4 text-primary rounded border-slate-700 bg-slate-800"
-                            />
-                            <span className="text-sm text-slate-300">Fixo Mensal</span>
-                        </label>
-                    </div>
-                    {!formData.isFixed && (
-                            <div className="flex items-center gap-2">
-                            <CalendarDays className="text-slate-500" size={16}/>
-                            <input 
-                                type="number" min="1" max="360"
-                                className="w-16 bg-slate-950 border border-slate-700 rounded p-1 text-center text-sm text-white"
-                                value={formData.installments}
-                                onChange={e => setFormData({...formData, installments: Number(e.target.value)})}
-                            />
-                            <span className="text-sm text-slate-400">parcelas</span>
-                        </div>
-                    )}
-                </div>
-
-                <div className="pt-2 flex gap-3">
-                    <button type="button" onClick={() => handleQuickSave('forecast')} className="flex-1 flex flex-col items-center justify-center gap-1 py-3 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400 transition-colors">
-                        <ThumbsDown size={20} className="text-slate-500" />
-                        <span className="text-xs font-semibold">Previsão (Futuro)</span>
-                    </button>
-                    <button type="button" onClick={() => handleQuickSave('transaction')} className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-slate-900 rounded-lg shadow-sm transition-colors ${formData.type === TransactionType.CREDIT ? 'bg-primary hover:bg-primaryHover' : 'bg-rose-600 hover:bg-rose-700'}`}>
-                        <ThumbsUp size={20} />
-                        <span className="text-xs font-semibold">{formData.installments > 1 || formData.isFixed ? 'Lançar 1ª + Previsões' : 'Lançamento (Hoje)'}</span>
-                    </button>
-                </div>
-            </div>
-          </div>
-        </div>
-       )}
     </div>
   );
 };

@@ -22,6 +22,7 @@ export interface Category {
   id: number;
   name: string;
   type: CategoryType;
+  groupType?: string; // Novo campo para agrupamento no DRE
 }
 
 export interface KeywordRule {
@@ -29,7 +30,7 @@ export interface KeywordRule {
   keyword: string;
   type: TransactionType;
   categoryId: number;
-  bankId?: number | null; // Adicionado para vincular a banco específico
+  bankId?: number | null;
 }
 
 export interface OFXImport {
@@ -50,7 +51,7 @@ export interface Transaction {
   categoryId?: number;
   bankId: number;
   reconciled: boolean;
-  ofxImportId?: number | null; // Link to the OFX file
+  ofxImportId?: number | null;
 }
 
 export interface Forecast {
@@ -61,10 +62,10 @@ export interface Forecast {
   type: TransactionType;
   bankId: number;
   categoryId: number;
-  realized: boolean; // Se já foi efetivado virou transação ou não
+  realized: boolean;
   installmentCurrent?: number;
   installmentTotal?: number;
-  groupId?: string; // Para identificar parcelas do mesmo grupo
+  groupId?: string;
 }
 
 export interface DashboardStats {
