@@ -168,31 +168,12 @@ const Forecasts: React.FC<ForecastsProps> = ({ token, userId, banks, categories,
   const handleRealize = async (id: number) => {
       if(confirm('Confirmar realização desta previsão? Ela será movida para Lançamentos.')) {
            try {
+               // Backend now handles creation of transaction automatically
                await fetch(`/api/forecasts/${id}/realize`, { 
                    method: 'PATCH',
                    headers: getHeaders()
                 });
                
-               const forecast = forecasts.find(f => f.id === id);
-               if (forecast) {
-                   const descSuffix = forecast.installmentTotal 
-                      ? ` (${forecast.installmentCurrent}/${forecast.installmentTotal})` 
-                      : (forecast.groupId ? ' (Recorrente)' : '');
-
-                   await fetch('/api/transactions', {
-                       method: 'POST',
-                       headers: getHeaders(),
-                       body: JSON.stringify({
-                           date: forecast.date,
-                           description: forecast.description + descSuffix,
-                           value: forecast.value,
-                           type: forecast.type,
-                           categoryId: forecast.categoryId,
-                           bankId: forecast.bankId,
-                           reconciled: false
-                       })
-                   });
-               }
                await fetchForecasts();
                onUpdate(); // Trigger global update
            } catch (e) {

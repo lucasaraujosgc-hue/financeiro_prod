@@ -244,38 +244,56 @@ const INITIAL_BANKS_SEED = [
   { name: 'Caixa Registradora', logo: '/logo/caixaf.png' },
 ];
 
+// CATEGORIAS PADRONIZADAS PARA DRE
 const INITIAL_CATEGORIES_SEED = [
     // RECEITAS
     { name: 'Vendas de Mercadorias', type: 'receita', group: 'receita_bruta' },
     { name: 'Prestação de Serviços', type: 'receita', group: 'receita_bruta' },
     { name: 'Receita de Aluguel', type: 'receita', group: 'outras_receitas' },
     { name: 'Comissões Recebidas', type: 'receita', group: 'receita_bruta' },
-    { name: 'Receita Financeira (juros, rendimentos)', type: 'receita', group: 'receita_financeira' },
+    { name: 'Receita Financeira', type: 'receita', group: 'receita_financeira' },
     { name: 'Devoluções de Despesas', type: 'receita', group: 'receita_financeira' },
     { name: 'Reembolsos de Clientes', type: 'receita', group: 'outras_receitas' },
-    { name: 'Transferências Internas', type: 'receita', group: 'nao_operacional' },
-    { name: 'Aportes de Sócios / Investimentos', type: 'receita', group: 'nao_operacional' },
     { name: 'Outras Receitas Operacionais', type: 'receita', group: 'outras_receitas' },
-    { name: 'Receitas Não Operacionais (venda de ativo)', type: 'receita', group: 'receita_nao_operacional' },
-    // DESPESAS
-    { name: 'Compra de Mercadorias / Matéria-Prima', type: 'despesa', group: 'cmv' },
-    { name: 'Fretes e Transportes', type: 'despesa', group: 'cmv' },
-    { name: 'Despesas com Pessoal (salários, pró-labore)', type: 'despesa', group: 'despesa_pessoal' },
-    { name: 'Serviços de Terceiros (contabilidade, marketing)', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Despesas Administrativas (papelaria, escritório)', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Despesas Comerciais (comissões, propaganda)', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Energia Elétrica / Água / Telefone / Internet', type: 'despesa', group: 'despesa_administrativa' },
+    { name: 'Venda de Ativo Imobilizado', type: 'receita', group: 'receita_nao_operacional' },
+    
+    // CUSTOS
+    { name: 'Compra de Mercadorias', type: 'despesa', group: 'cmv' },
+    { name: 'Matéria-Prima', type: 'despesa', group: 'cmv' },
+    { name: 'Fretes sobre Compras', type: 'despesa', group: 'cmv' },
+    { name: 'Embalagens', type: 'despesa', group: 'cmv' },
+
+    // DESPESAS OPERACIONAIS
+    { name: 'Salários e Ordenados', type: 'despesa', group: 'despesa_pessoal' },
+    { name: 'Pró-Labore', type: 'despesa', group: 'despesa_pessoal' },
+    { name: 'Vale Transporte / Alimentação', type: 'despesa', group: 'despesa_pessoal' },
+    { name: 'Encargos Sociais (FGTS/INSS)', type: 'despesa', group: 'despesa_pessoal' },
+    
     { name: 'Aluguel e Condomínio', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Manutenção e Limpeza', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Combustível e Deslocamento', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Seguros', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Tarifas Bancárias e Juros', type: 'despesa', group: 'despesa_financeira' },
-    { name: 'Impostos e Taxas (ISS, ICMS, DAS)', type: 'despesa', group: 'impostos' },
-    { name: 'Despesas Financeiras', type: 'despesa', group: 'despesa_financeira' },
-    { name: 'Transferências Internas', type: 'despesa', group: 'nao_operacional' },
-    { name: 'Distribuição de Lucros / Retirada', type: 'despesa', group: 'nao_operacional' },
-    { name: 'Outras Despesas Operacionais', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Despesas Não Operacionais', type: 'despesa', group: 'despesa_nao_operacional' }
+    { name: 'Energia / Água / Telefone', type: 'despesa', group: 'despesa_administrativa' },
+    { name: 'Internet e Sistemas', type: 'despesa', group: 'despesa_administrativa' },
+    { name: 'Material de Escritório/Limpeza', type: 'despesa', group: 'despesa_administrativa' },
+    { name: 'Contabilidade e Jurídico', type: 'despesa', group: 'despesa_administrativa' },
+    
+    { name: 'Marketing e Publicidade', type: 'despesa', group: 'despesa_operacional' },
+    { name: 'Comissões de Vendas', type: 'despesa', group: 'despesa_operacional' },
+    { name: 'Combustível e Viagens', type: 'despesa', group: 'despesa_operacional' },
+    
+    // IMPOSTOS
+    { name: 'DAS - Simples Nacional', type: 'despesa', group: 'impostos' },
+    { name: 'ICMS / ISS a Recolher', type: 'despesa', group: 'impostos' },
+    { name: 'Taxas e Alvarás', type: 'despesa', group: 'impostos' },
+
+    // FINANCEIRAS
+    { name: 'Tarifas Bancárias', type: 'despesa', group: 'despesa_financeira' },
+    { name: 'Juros Pagos', type: 'despesa', group: 'despesa_financeira' },
+    { name: 'Antecipação de Recebíveis', type: 'despesa', group: 'despesa_financeira' },
+
+    // NÃO OPERACIONAIS / TRANSFERÊNCIAS
+    { name: 'Distribuição de Lucros', type: 'despesa', group: 'nao_operacional' },
+    { name: 'Empréstimos (Pagamento Principal)', type: 'despesa', group: 'nao_operacional' },
+    { name: 'Transferência entre Contas', type: 'despesa', group: 'nao_operacional' },
+    { name: 'Transferência entre Contas', type: 'receita', group: 'nao_operacional' }
 ];
 
 const ensureColumn = (table, column, definition) => {
@@ -665,10 +683,64 @@ app.put('/api/forecasts/:id', authenticateToken, (req, res) => {
     );
 });
 
+// ATUALIZADO: Efetivação de previsão agora CRIA transação automaticamente
 app.patch('/api/forecasts/:id/realize', authenticateToken, (req, res) => {
-    db.run(`UPDATE forecasts SET realized = 1 WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err) => {
-        if(err) return res.status(500).json({ error: err.message });
-        res.json({ success: true });
+    const forecastId = req.params.id;
+    const userId = req.userId;
+
+    db.get(`SELECT * FROM forecasts WHERE id = ? AND user_id = ?`, [forecastId, userId], (err, forecast) => {
+        if (err || !forecast) return res.status(404).json({ error: "Previsão não encontrada" });
+        if (forecast.realized) return res.status(400).json({ error: "Previsão já realizada" });
+
+        // Sufixo para a descrição
+        let descSuffix = '';
+        if (forecast.installment_total) {
+            descSuffix = ` (${forecast.installment_current}/${forecast.installment_total})`;
+        } else if (forecast.group_id) {
+            descSuffix = ' (Recorrente)';
+        }
+
+        const finalDescription = forecast.description + descSuffix;
+
+        db.serialize(() => {
+            db.run('BEGIN TRANSACTION');
+
+            // 1. Atualizar status da previsão
+            db.run(`UPDATE forecasts SET realized = 1 WHERE id = ?`, [forecastId], (err) => {
+                if (err) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ error: err.message });
+                }
+
+                // 2. Inserir na tabela de transações
+                db.run(
+                    `INSERT INTO transactions (user_id, date, description, value, type, category_id, bank_id, reconciled) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+                    [userId, forecast.date, finalDescription, forecast.value, forecast.type, forecast.category_id, forecast.bank_id],
+                    function(err) {
+                        if (err) {
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ error: err.message });
+                        }
+
+                        // 3. Atualizar saldo do banco
+                        const modifier = forecast.type === 'credito' ? 1 : -1;
+                        db.run(
+                            `UPDATE banks SET balance = balance + ? WHERE id = ?`,
+                            [forecast.value * modifier, forecast.bank_id],
+                            (err) => {
+                                if (err) {
+                                    db.run('ROLLBACK');
+                                    return res.status(500).json({ error: err.message });
+                                }
+                                db.run('COMMIT');
+                                res.json({ success: true });
+                            }
+                        );
+                    }
+                );
+            });
+        });
     });
 });
 
@@ -872,7 +944,7 @@ app.get('/api/reports/dre', authenticateToken, (req, res) => {
     const y = parseInt(year);
     const m = month ? parseInt(month) : null;
 
-    let query = `SELECT t.*, c.name as category_name, c.type as category_type 
+    let query = `SELECT t.*, c.name as category_name, c.type as category_type, c.group_type
                  FROM transactions t 
                  LEFT JOIN categories c ON t.category_id = c.id 
                  WHERE t.user_id = ? AND strftime('%Y', t.date) = ?`;
@@ -899,61 +971,41 @@ app.get('/api/reports/dre', authenticateToken, (req, res) => {
         };
 
         rows.forEach(t => {
-            const cat = (t.category_name || '').toLowerCase();
             const val = t.value;
             const isCredit = t.type === 'credito';
-            
-            if (cat.includes('transferências internas') || 
-                cat.includes('aportes de sócios') || 
-                cat.includes('distribuição de lucros') ||
-                cat.includes('retirada de sócios')) {
-                return;
-            }
+            const group = t.group_type;
+            const cat = (t.category_name || '').toLowerCase();
 
-            if (cat.includes('vendas de mercadorias') || 
-                cat.includes('prestação de serviços') || 
-                cat.includes('comissões recebidas') ||
-                cat.includes('receita de aluguel') ||
-                cat.includes('outras receitas operacionais')) {
-                 if (isCredit) dre.receitaBruta += val;
-            }
-            else if (cat.includes('impostos e taxas') || 
-                     cat.includes('impostos sobre vendas') ||
-                     cat.includes('icms') || cat.includes('iss') || cat.includes('das') ||
-                     cat.includes('devoluções de vendas') ||
-                     cat.includes('descontos concedidos')) {
-                 if (!isCredit) dre.deducoes += val;
-            }
-            else if (cat.includes('compra de mercadorias') || 
-                     cat.includes('matéria-prima') || 
-                     cat.includes('fretes e transportes') || 
-                     cat.includes('custos diretos')) {
-                 if (!isCredit) dre.cmv += val;
-            }
-            else if (cat.includes('receita financeira') || 
-                     cat.includes('devoluções de despesas') || 
-                     cat.includes('reembolsos de clientes')) {
-                 if (isCredit) dre.resultadoFinanceiro += val;
-            }
-            else if (cat.includes('despesas financeiras') || 
-                     cat.includes('juros sobre empréstimos') || 
-                     cat.includes('multas') || 
-                     cat.includes('iof')) {
-                 if (!isCredit) dre.resultadoFinanceiro -= val;
-            }
-            else if (cat.includes('receitas não operacionais') || 
-                     cat.includes('venda de ativo')) {
-                 if (isCredit) dre.receitaNaoOperacional += val;
-            }
-            else if (cat.includes('despesas não operacionais') || 
-                     cat.includes('baixa de bens')) {
-                 if (!isCredit) dre.despesaNaoOperacional += val;
-            }
-            else if (cat.includes('irpj') || cat.includes('csll')) {
-                 if (!isCredit) dre.impostos += val;
-            }
-            else if (!isCredit) {
-                dre.despesasOperacionais += val;
+            // Lógica de Agrupamento DRE (Prioriza group_type, fallback para nome)
+            if (group) {
+                switch(group) {
+                    case 'receita_bruta': if(isCredit) dre.receitaBruta += val; break;
+                    case 'outras_receitas': if(isCredit) dre.receitaBruta += val; break; // Agrupando em bruta simplificado
+                    case 'impostos': if(!isCredit) dre.deducoes += val; break;
+                    case 'cmv': if(!isCredit) dre.cmv += val; break;
+                    case 'receita_financeira': if(isCredit) dre.resultadoFinanceiro += val; break;
+                    case 'despesa_financeira': if(!isCredit) dre.resultadoFinanceiro -= val; break;
+                    case 'receita_nao_operacional': if(isCredit) dre.receitaNaoOperacional += val; break;
+                    case 'despesa_nao_operacional': if(!isCredit) dre.despesaNaoOperacional += val; break;
+                    case 'despesa_operacional':
+                    case 'despesa_pessoal':
+                    case 'despesa_administrativa':
+                        if(!isCredit) dre.despesasOperacionais += val; 
+                        break;
+                    case 'nao_operacional': break; // Ignora transferências
+                    default: 
+                        if(!isCredit) dre.despesasOperacionais += val;
+                }
+            } else {
+                // Fallback legado por nome
+                if (cat.includes('transferências internas') || cat.includes('aportes')) return;
+
+                if (cat.includes('vendas') || cat.includes('serviços')) { if (isCredit) dre.receitaBruta += val; }
+                else if (cat.includes('impostos') || cat.includes('taxas')) { if (!isCredit) dre.deducoes += val; }
+                else if (cat.includes('compra') || cat.includes('matéria')) { if (!isCredit) dre.cmv += val; }
+                else if (cat.includes('financeira') && isCredit) { dre.resultadoFinanceiro += val; }
+                else if (cat.includes('financeira') && !isCredit) { dre.resultadoFinanceiro -= val; }
+                else if (!isCredit) { dre.despesasOperacionais += val; }
             }
         });
 
@@ -982,12 +1034,13 @@ app.get('/api/reports/dre', authenticateToken, (req, res) => {
 });
 
 app.get('/api/reports/analysis', authenticateToken, (req, res) => {
+    // ... logic same as previous response, keeping it concise ...
     const { year, month } = req.query;
     const userId = req.userId;
     const y = parseInt(year);
     const m = month ? parseInt(month) : null;
 
-    let query = `SELECT t.*, c.name as category_name, c.type as category_type 
+    let query = `SELECT t.*, c.name as category_name, c.type as category_type, c.group_type
                  FROM transactions t 
                  LEFT JOIN categories c ON t.category_id = c.id 
                  WHERE t.user_id = ? AND strftime('%Y', t.date) = ?`;
@@ -1028,39 +1081,18 @@ app.get('/api/reports/analysis', authenticateToken, (req, res) => {
                 totalDespesas += r.value;
             }
 
-            // DRE Categorization Logic duplicated for consistency with DRE endpoint
-            const cat = (r.category_name || '').toLowerCase();
+            // Simplified DRE Logic for KPIs (Similar to /dre endpoint)
             const val = r.value;
             const isCredit = r.type === 'credito';
+            const group = r.group_type;
 
-            if (cat.includes('transferências internas') || cat.includes('aportes de sócios') || cat.includes('distribuição de lucros')) return;
-
-            if (cat.includes('vendas de mercadorias') || cat.includes('prestação de serviços') || cat.includes('comissões recebidas') || cat.includes('receita de aluguel')) {
-                 if (isCredit) dre.receitaBruta += val;
-            }
-            else if (cat.includes('impostos e taxas') || cat.includes('icms') || cat.includes('iss') || cat.includes('das') || cat.includes('devoluções')) {
-                 if (!isCredit) dre.deducoes += val;
-            }
-            else if (cat.includes('compra de mercadorias') || cat.includes('matéria-prima') || cat.includes('fretes') || cat.includes('custos diretos')) {
-                 if (!isCredit) dre.cmv += val;
-            }
-            else if (cat.includes('receita financeira')) {
-                 if (isCredit) dre.resultadoFinanceiro += val;
-            }
-            else if (cat.includes('despesas financeiras') || cat.includes('juros')) {
-                 if (!isCredit) dre.resultadoFinanceiro -= val;
-            }
-            else if (cat.includes('receitas não operacionais')) {
-                 if (isCredit) dre.receitaNaoOperacional += val;
-            }
-            else if (cat.includes('despesas não operacionais')) {
-                 if (!isCredit) dre.despesaNaoOperacional += val;
-            }
-            else if (cat.includes('irpj') || cat.includes('csll')) {
-                 if (!isCredit) dre.impostos += val;
-            }
-            else if (!isCredit) {
-                dre.despesasOperacionais += val;
+            if (group) {
+                 if(['receita_bruta', 'outras_receitas'].includes(group) && isCredit) dre.receitaBruta += val;
+                 else if(group === 'impostos' && !isCredit) dre.deducoes += val;
+                 else if(group === 'cmv' && !isCredit) dre.cmv += val;
+                 else if(group === 'receita_financeira') dre.resultadoFinanceiro += val;
+                 else if(group === 'despesa_financeira') dre.resultadoFinanceiro -= val;
+                 else if(group.startsWith('despesa_') && !isCredit) dre.despesasOperacionais += val;
             }
         });
 
