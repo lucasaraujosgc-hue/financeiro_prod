@@ -9,24 +9,71 @@ interface CategoriesProps {
   onUpdateCategory?: (category: Category) => void;
 }
 
-// Grupos baseados na estrutura de DRE do server.js
+// Grupos baseados na nova estrutura de DRE e Seed do server.js
 const INCOME_GROUPS = [
-    { id: 'receita_bruta', label: 'Receita Bruta de Vendas/Serviços', desc: 'Vendas de produtos ou serviços (Nota Fiscal).' },
-    { id: 'outras_receitas', label: 'Outras Receitas Operacionais', desc: 'Receitas acessórias da operação principal.' },
-    { id: 'receita_financeira', label: 'Receitas Financeiras', desc: 'Rendimentos de aplicações, Juros recebidos.' },
-    { id: 'receita_nao_operacional', label: 'Receitas Não Operacionais', desc: 'Venda de bens do ativo, Ganhos de capital.' },
-    { id: 'nao_operacional', label: 'Movimentações Internas', desc: 'Transferências entre contas, Aportes de sócios (Não afeta lucro).' }
+  {
+    id: 'receita_bruta',
+    label: 'Receita Bruta',
+    desc: 'Receitas principais da atividade da empresa (vendas de mercadorias, prestação de serviços, comissões).'
+  },
+  {
+    id: 'outras_receitas',
+    label: 'Outras Receitas Operacionais',
+    desc: 'Receitas acessórias relacionadas à operação (aluguéis, reembolsos, receitas eventuais da atividade).'
+  },
+  {
+    id: 'receita_financeira',
+    label: 'Receitas Financeiras',
+    desc: 'Rendimentos financeiros, juros recebidos, aplicações.'
+  },
+  {
+    id: 'receita_nao_operacional',
+    label: 'Receitas Não Operacionais',
+    desc: 'Ganhos eventuais fora da atividade principal, como venda de ativo imobilizado.'
+  },
+  {
+    id: 'nao_operacional',
+    label: 'Movimentações Internas',
+    desc: 'Aportes de sócios e transferências internas. Não representam receita e não afetam o lucro.'
+  }
 ];
 
 const EXPENSE_GROUPS = [
-    { id: 'cmv', label: 'Custos (CMV / CSP)', desc: 'Custo direto para produzir ou comprar o que foi vendido.' },
-    { id: 'despesa_operacional', label: 'Despesas Operacionais Gerais', desc: 'Gastos para manter a empresa (Marketing, Aluguel, Sistemas).' },
-    { id: 'despesa_pessoal', label: 'Despesas com Pessoal', desc: 'Salários, Pró-labore, Férias, 13º.' },
-    { id: 'despesa_administrativa', label: 'Despesas Administrativas', desc: 'Material de escritório, Limpeza, Copa.' },
-    { id: 'impostos', label: 'Impostos e Taxas', desc: 'DAS, ICMS, ISS, Taxas diversas.' },
-    { id: 'despesa_financeira', label: 'Despesas Financeiras', desc: 'Juros pagos, Multas, Tarifas bancárias.' },
-    { id: 'despesa_nao_operacional', label: 'Despesas Não Operacionais', desc: 'Perdas de capital, Baixa de bens.' },
-    { id: 'nao_operacional', label: 'Movimentações Internas', desc: 'Transferências, Distribuição de Lucros (Não afeta lucro operacional).' }
+  {
+    id: 'custo_operacional',
+    label: 'Custos Operacionais (CMV / CSP)',
+    desc: 'Custos diretamente ligados à venda ou prestação do serviço (compra de mercadorias, insumos, fretes de compra).'
+  },
+  {
+    id: 'despesa_pessoal',
+    label: 'Despesas com Pessoal',
+    desc: 'Salários, pró-labore, encargos trabalhistas e previdenciários.'
+  },
+  {
+    id: 'despesa_administrativa',
+    label: 'Despesas Administrativas',
+    desc: 'Gastos administrativos para manter a empresa funcionando (aluguel, escritório, contabilidade).'
+  },
+  {
+    id: 'despesa_operacional',
+    label: 'Despesas Operacionais',
+    desc: 'Despesas ligadas à operação e vendas (marketing, sistemas, deslocamentos, manutenção).'
+  },
+  {
+    id: 'impostos',
+    label: 'Impostos sobre o Faturamento',
+    desc: 'Tributos incidentes sobre a receita (DAS, ISS, ICMS). Reduzem a Receita Bruta.'
+  },
+  {
+    id: 'despesa_financeira',
+    label: 'Despesas Financeiras',
+    desc: 'Juros, multas e tarifas bancárias.'
+  },
+  {
+    id: 'nao_operacional',
+    label: 'Despesas e Movimentações Não Operacionais',
+    desc: 'Distribuição de lucros, serviços eventuais não operacionais e transferências internas. Não afetam o resultado operacional.'
+  }
 ];
 
 const Categories: React.FC<CategoriesProps> = ({ categories, onAddCategory, onDeleteCategory, onUpdateCategory }) => {

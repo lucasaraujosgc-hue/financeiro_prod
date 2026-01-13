@@ -303,17 +303,17 @@ const Reports: React.FC<ReportsProps> = ({ token }) => {
       return (
           <div className="bg-surface rounded-xl border border-slate-800 p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto">
               <h3 className="text-xl font-bold text-white mb-6 text-center border-b border-slate-800 pb-4">
-                  Demonstração do Resultado do Exercício (Simplificado)
+                  Demonstração do Resultado do Exercício (DRE)
               </h3>
               
-              <DreRow label="Receita Bruta de Vendas" value={data.receitaBruta} isSubtotal />
-              <DreRow label="(-) Deduções e Impostos" value={-data.deducoes} indent />
+              <DreRow label="Receita Bruta" value={data.receitaBruta} isSubtotal />
+              <DreRow label="(-) Impostos sobre faturamento" value={-data.deducoes} indent />
               <DreRow label="(=) Receita Líquida" value={data.receitaLiquida} isTotal />
               
               <div className="h-4"></div>
               
-              <DreRow label="(-) Custos (CMV/CSP)" value={-data.cmv} indent />
-              <DreRow label="(=) Lucro Bruto" value={data.resultadoBruto} isTotal />
+              <DreRow label="(-) Custos Operacionais (CMV/CSP)" value={-data.cmv} indent />
+              <DreRow label="(=) Resultado Bruto" value={data.resultadoBruto} isTotal />
               
               <div className="h-4"></div>
               
@@ -323,15 +323,15 @@ const Reports: React.FC<ReportsProps> = ({ token }) => {
               <div className="h-4"></div>
               
               <DreRow label="(+/-) Resultado Financeiro" value={data.resultadoFinanceiro} />
-              <DreRow label="(+/-) Resultado Não Operacional" value={data.resultadoNaoOperacional} />
+              <DreRow label="(+/-) Outras Receitas Operacionais" value={data.outrasReceitas} />
+              <DreRow label="(=) Resultado Antes do Não Operacional" value={data.resultadoAntesNaoOperacional} isTotal />
               
               <div className="h-4"></div>
               
-              <DreRow label="(=) Resultado Antes IR/CSLL" value={data.resultadoAntesImpostos} isTotal />
-              <DreRow label="(-) Provisão Impostos" value={-data.impostos} indent />
+              <DreRow label="(+/-) Resultado Não Operacional" value={data.resultadoNaoOperacional} />
               
               <div className="mt-4 p-4 bg-emerald-900/20 border border-emerald-900/50 rounded-lg flex justify-between items-center">
-                  <span className="text-lg font-bold text-emerald-400">LUCRO / PREJUÍZO LÍQUIDO</span>
+                  <span className="text-lg font-bold text-emerald-400">RESULTADO LÍQUIDO</span>
                   <span className={`text-xl font-bold ${(data.lucroLiquido || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                       R$ {(data.lucroLiquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </span>

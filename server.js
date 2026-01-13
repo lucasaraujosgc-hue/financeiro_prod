@@ -179,38 +179,53 @@ const INITIAL_BANKS_SEED = [
   { name: 'Caixa Registradora', logo: '/logo/caixaf.png' },
 ];
 
-// LISTA DE CATEGORIAS LIMPA (SEM DUPLICATAS)
+// LISTA DE CATEGORIAS LIMPA (SEM DUPLICATAS) - ATUALIZADA
 const INITIAL_CATEGORIES_SEED = [
-    { name: 'Vendas de Mercadorias', type: 'receita', group: 'receita_bruta' },
-    { name: 'Prestação de Serviços', type: 'receita', group: 'receita_bruta' },
-    { name: 'Comissões Recebidas', type: 'receita', group: 'receita_bruta' },
-    { name: 'Receita Financeira', type: 'receita', group: 'receita_financeira' },
-    { name: 'Receita de Aluguel', type: 'receita', group: 'outras_receitas' },
-    { name: 'Outras Receitas Operacionais', type: 'receita', group: 'outras_receitas' },
-    { name: 'Reembolsos de Clientes', type: 'receita', group: 'outras_receitas' },
-    { name: 'Venda de Ativo Imobilizado', type: 'receita', group: 'receita_nao_operacional' },
-    { name: 'Aportes de Sócios / Investimentos', type: 'receita', group: 'nao_operacional' },
-    { name: 'Transferências Internas (Entrada)', type: 'receita', group: 'nao_operacional' },
-    { name: 'Compra de Mercadorias (CMV)', type: 'despesa', group: 'cmv' },
-    { name: 'Custos de Serviços Prestados', type: 'despesa', group: 'cmv' },
-    { name: 'Fretes sobre Compras', type: 'despesa', group: 'cmv' },
-    { name: 'Salários e Ordenados', type: 'despesa', group: 'despesa_pessoal' },
-    { name: 'Pró-Labore', type: 'despesa', group: 'despesa_pessoal' },
-    { name: 'Benefícios e Encargos Sociais', type: 'despesa', group: 'despesa_pessoal' },
-    { name: 'Aluguel e Condomínio', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Energia, Água e Internet', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Material de Escritório e Limpeza', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Seguros', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Serviços de Contabilidade/Jurídico', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Marketing e Publicidade', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Combustível e Deslocamento', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Manutenção e Reparos', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Softwares e Licenças', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Impostos e Taxas (DAS, ISS, ICMS)', type: 'despesa', group: 'impostos' },
-    { name: 'Tarifas Bancárias', type: 'despesa', group: 'despesa_financeira' },
-    { name: 'Juros e Multas Pagos', type: 'despesa', group: 'despesa_financeira' },
-    { name: 'Distribuição de Lucros', type: 'despesa', group: 'nao_operacional' },
-    { name: 'Transferências Internas (Saída)', type: 'despesa', group: 'nao_operacional' }
+  // RECEITAS OPERACIONAIS
+  { name: 'Vendas de Mercadorias', type: 'receita', group: 'receita_bruta' },
+  { name: 'Prestação de Serviços', type: 'receita', group: 'receita_bruta' },
+  { name: 'Comissões Recebidas', type: 'receita', group: 'receita_bruta' },
+
+  // OUTRAS RECEITAS
+  { name: 'Receita Financeira', type: 'receita', group: 'receita_financeira' },
+  { name: 'Receita de Aluguel', type: 'receita', group: 'outras_receitas' },
+  { name: 'Outras Receitas Operacionais', type: 'receita', group: 'outras_receitas' },
+  { name: 'Reembolsos de Clientes', type: 'receita', group: 'outras_receitas' },
+
+  // RECEITAS NÃO OPERACIONAIS
+  { name: 'Venda de Ativo Imobilizado', type: 'receita', group: 'receita_nao_operacional' },
+  { name: 'Aportes de Sócios / Investimentos', type: 'receita', group: 'nao_operacional' },
+  { name: 'Transferências Internas (Entrada)', type: 'receita', group: 'nao_operacional' },
+
+  // CUSTOS (CMV / CSP)
+  { name: 'Compra de Mercadorias', type: 'despesa', group: 'custo_operacional' },
+  { name: 'Custos de Serviços Prestados', type: 'despesa', group: 'custo_operacional' },
+  { name: 'Fretes sobre Compras', type: 'despesa', group: 'custo_operacional' },
+  
+  // DESPESAS COM PESSOAL
+  { name: 'Salários e Ordenados', type: 'despesa', group: 'despesa_pessoal' },
+  { name: 'Pró-Labore', type: 'despesa', group: 'despesa_pessoal' },
+  { name: 'FGTS, INSS IRRF', type: 'despesa', group: 'despesa_pessoal' },
+
+  // DESPESAS ADMINISTRATIVAS
+  { name: 'Aluguel e Condomínio', type: 'despesa', group: 'despesa_administrativa' },
+  { name: 'Energia, Água e Internet', type: 'despesa', group: 'despesa_administrativa' },
+  { name: 'Material de Escritório e Limpeza', type: 'despesa', group: 'despesa_administrativa' },
+  { name: 'Seguros', type: 'despesa', group: 'despesa_administrativa' },
+  { name: 'Serviços de Terceiros (Contabilidade, Admin e Jurídico)', type: 'despesa', group: 'despesa_administrativa' },
+
+  // DESPESAS OPERACIONAIS
+  { name: 'Sistemas / Marketing e Publicidade', type: 'despesa', group: 'despesa_operacional' },
+  { name: 'Combustível, Deslocamento / Manutenção e Reparos', type: 'despesa', group: 'despesa_operacional' },
+  
+  // IMPOSTOS E DESPESAS FINANCEIRAS
+  { name: 'Impostos sobre o Faturamento (DAS, ISS, ICMS)', type: 'despesa', group: 'impostos' },
+  { name: 'Tarifas Bancárias/Juros e Multas Pagos', type: 'despesa', group: 'despesa_financeira' },
+
+  // NÃO OPERACIONAIS
+  { name: 'Distribuição de Lucros', type: 'despesa', group: 'nao_operacional' },
+  { name: 'Serviços Eventuais Não Operacionais', type: 'despesa', group: 'nao_operacional' },
+  { name: 'Transferências Internas (Saída)', type: 'despesa', group: 'nao_operacional' }
 ];
 
 const ensureColumn = (table, column, definition) => {
@@ -650,24 +665,39 @@ app.get('/api/reports/dre', authenticateToken, (req, res) => {
     db.all(query, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
 
-        let dre = { receitaBruta: 0, deducoes: 0, cmv: 0, despesasOperacionais: 0, resultadoFinanceiro: 0, receitaNaoOperacional: 0, despesaNaoOperacional: 0, impostos: 0 };
+        let dre = { 
+            receitaBruta: 0, 
+            deducoes: 0, // Impostos
+            cmv: 0, // Custo Operacional
+            outrasReceitas: 0,
+            despesasOperacionais: 0, 
+            resultadoFinanceiro: 0, 
+            receitaNaoOperacional: 0, 
+            despesaNaoOperacional: 0, 
+            impostos: 0 // Mantido para referência, mas usado em deducoes
+        };
 
         rows.forEach(t => {
             const group = t.group_type || '';
             const val = t.value;
             const isCredit = t.type === 'credito';
 
-            // Agrupamento baseado no DRE
+            // Agrupamento baseado no DRE Novo
             if (group === 'receita_bruta') dre.receitaBruta += val;
-            else if (group === 'impostos') { if(!isCredit) dre.deducoes += val; } // Simplificação: impostos redutores
-            else if (group === 'cmv') dre.cmv += val;
+            else if (group === 'impostos') { 
+                if(!isCredit) {
+                    dre.deducoes += val; 
+                    dre.impostos += val;
+                }
+            }
+            else if (group === 'custo_operacional') dre.cmv += val;
+            else if (group === 'outras_receitas') dre.outrasReceitas += val;
             else if (group === 'receita_financeira') dre.resultadoFinanceiro += val;
             else if (group === 'despesa_financeira') dre.resultadoFinanceiro -= val;
             else if (group === 'receita_nao_operacional') dre.receitaNaoOperacional += val;
             else if (group === 'despesa_nao_operacional') dre.despesaNaoOperacional += val;
-            else if (group === 'outras_receitas') dre.receitaBruta += val; // Agrupa com bruta operacional
             else if (['despesa_operacional', 'despesa_pessoal', 'despesa_administrativa'].includes(group)) dre.despesasOperacionais += val;
-            else if (group === 'nao_operacional') { /* Ignorar transferências */ }
+            else if (group === 'nao_operacional') { /* Ignorar transferências internas */ }
             else { 
                 // Fallback por texto se não tiver grupo
                 const cat = (t.category_name || '').toLowerCase();
@@ -676,17 +706,32 @@ app.get('/api/reports/dre', authenticateToken, (req, res) => {
             }
         });
 
+        // Cálculo Final Correto
         const receitaLiquida = dre.receitaBruta - dre.deducoes;
         const resultadoBruto = receitaLiquida - dre.cmv;
         const resultadoOperacional = resultadoBruto - dre.despesasOperacionais;
+        
+        // Resultado Antes do Não Operacional (inclui financeiro e outras receitas)
+        const resultadoAntesNaoOperacional = resultadoOperacional + dre.resultadoFinanceiro + dre.outrasReceitas;
+        
         const resultadoNaoOperacionalTotal = dre.receitaNaoOperacional - dre.despesaNaoOperacional;
-        const resultadoAntesImpostos = resultadoOperacional + dre.resultadoFinanceiro + resultadoNaoOperacionalTotal;
-        const lucroLiquido = resultadoAntesImpostos - dre.impostos;
+        
+        // Lucro Líquido
+        const lucroLiquido = resultadoAntesNaoOperacional + resultadoNaoOperacionalTotal;
 
         res.json({
-            receitaBruta: dre.receitaBruta, deducoes: dre.deducoes, receitaLiquida, cmv: dre.cmv, resultadoBruto,
-            despesasOperacionais: dre.despesasOperacionais, resultadoOperacional, resultadoFinanceiro: dre.resultadoFinanceiro,
-            resultadoNaoOperacional: resultadoNaoOperacionalTotal, impostos: dre.impostos, lucroLiquido, resultadoAntesImpostos
+            receitaBruta: dre.receitaBruta, 
+            deducoes: dre.deducoes, 
+            receitaLiquida, 
+            cmv: dre.cmv, 
+            resultadoBruto,
+            despesasOperacionais: dre.despesasOperacionais, 
+            resultadoOperacional, 
+            resultadoFinanceiro: dre.resultadoFinanceiro,
+            outrasReceitas: dre.outrasReceitas,
+            resultadoNaoOperacional: resultadoNaoOperacionalTotal, 
+            resultadoAntesNaoOperacional,
+            lucroLiquido
         });
     });
 });
@@ -709,28 +754,35 @@ app.get('/api/reports/analysis', authenticateToken, (req, res) => {
         const despesas = {};
         let totalReceitas = 0;
         let totalDespesas = 0;
-        let dre = { receitaBruta: 0, cmv: 0, despesasOperacionais: 0, impostos: 0 };
+        let dre = { receitaBruta: 0, cmv: 0, despesasOperacionais: 0, impostos: 0, lucroLiquidoParcial: 0 };
 
         rows.forEach(r => {
+            const val = r.value;
             if (r.type === 'credito') {
-                receitas[r.category_name || 'Outros'] = (receitas[r.category_name || 'Outros'] || 0) + r.value;
-                totalReceitas += r.value;
-                if(r.group_type === 'receita_bruta') dre.receitaBruta += r.value;
+                receitas[r.category_name || 'Outros'] = (receitas[r.category_name || 'Outros'] || 0) + val;
+                totalReceitas += val;
+                if(r.group_type === 'receita_bruta') dre.receitaBruta += val;
+                dre.lucroLiquidoParcial += val;
             } else {
-                despesas[r.category_name || 'Outros'] = (despesas[r.category_name || 'Outros'] || 0) + r.value;
-                totalDespesas += r.value;
-                if(r.group_type === 'cmv') dre.cmv += r.value;
-                if(['despesa_operacional', 'despesa_pessoal'].includes(r.group_type)) dre.despesasOperacionais += r.value;
+                despesas[r.category_name || 'Outros'] = (despesas[r.category_name || 'Outros'] || 0) + val;
+                totalDespesas += val;
+                if(r.group_type === 'custo_operacional') dre.cmv += val;
+                if(['despesa_operacional', 'despesa_pessoal', 'despesa_administrativa'].includes(r.group_type)) dre.despesasOperacionais += val;
+                if(r.group_type === 'impostos') dre.impostos += val;
+                dre.lucroLiquidoParcial -= val;
             }
         });
 
-        // KPIs Básicos
-        const receitaLiquida = dre.receitaBruta; // Simplificado
+        // KPIs Básicos Corrigidos
+        const receitaLiquida = dre.receitaBruta - dre.impostos; // Receita Líquida Correta
+        
         const margemContribuicaoVal = receitaLiquida - dre.cmv;
         const margemContribuicaoPct = receitaLiquida > 0 ? (margemContribuicaoVal / receitaLiquida) * 100 : 0;
+        
         const resultadoOperacional = margemContribuicaoVal - dre.despesasOperacionais;
         const resultadoOperacionalPct = receitaLiquida > 0 ? (resultadoOperacional / receitaLiquida) * 100 : 0;
-        const resultadoLiquidoPct = totalReceitas > 0 ? ((totalReceitas - totalDespesas) / totalReceitas) * 100 : 0;
+        
+        const resultadoLiquidoPct = receitaLiquida > 0 ? (dre.lucroLiquidoParcial / receitaLiquida) * 100 : 0;
 
         res.json({
             receitas, despesas, totalReceitas, totalDespesas,
