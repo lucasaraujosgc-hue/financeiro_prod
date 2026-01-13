@@ -66,7 +66,7 @@ const Reports: React.FC<ReportsProps> = ({ token }) => {
   const [data, setData] = useState<any>(null);
   const [cycleData, setCycleData] = useState<any[]>([]);
 
-  // States for Daily Flow Chart (Cash Cycle)
+  // States for Dailoy Flow Chart (Cash Cycle)
   const [cycleStartDate, setCycleStartDate] = useState(() => {
       const date = new Date();
       date.setDate(1); // First day of current month

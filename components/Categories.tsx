@@ -9,7 +9,7 @@ interface CategoriesProps {
   onUpdateCategory?: (category: Category) => void;
 }
 
-// Grupos baseados na nova estrutura de DRE e Seed do server.js
+// Grupos baseados na nova estrutura de DRE e Seed d server.js
 const INCOME_GROUPS = [
   {
     id: 'receita_bruta',
