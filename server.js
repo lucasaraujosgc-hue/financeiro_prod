@@ -179,49 +179,41 @@ const INITIAL_BANKS_SEED = [
   { name: 'Caixa Registradora', logo: '/logo/caixaf.png' },
 ];
 
-// LISTA DE CATEGORIAS LIMPA - COM NOVOS GRUPOS CONTÁBEIS
+// LISTA DE CATEGORIAS ATUALIZADA CONFORME SOLICITADO
 const INITIAL_CATEGORIES_SEED = [
   // RECEITAS OPERACIONAIS
   { name: 'Vendas de Mercadorias', type: 'receita', group: 'receita_bruta' },
   { name: 'Prestação de Serviços', type: 'receita', group: 'receita_bruta' },
   { name: 'Comissões Recebidas', type: 'receita', group: 'receita_bruta' },
-
   // OUTRAS RECEITAS
   { name: 'Receita Financeira', type: 'receita', group: 'receita_financeira' },
   { name: 'Receita de Aluguel', type: 'receita', group: 'outras_receitas' },
   { name: 'Outras Receitas Operacionais', type: 'receita', group: 'outras_receitas' },
   { name: 'Reembolsos de Clientes', type: 'receita', group: 'outras_receitas' },
-
   // RECEITAS NÃO OPERACIONAIS
   { name: 'Venda de Ativo Imobilizado', type: 'receita', group: 'receita_nao_operacional' },
   { name: 'Aportes de Sócios / Investimentos', type: 'receita', group: 'nao_operacional' },
   { name: 'Transferências Internas (Entrada)', type: 'receita', group: 'nao_operacional' },
-
   // CUSTOS (CMV / CSP)
   { name: 'Compra de Mercadorias', type: 'despesa', group: 'custo_operacional' },
   { name: 'Custos de Serviços Prestados', type: 'despesa', group: 'custo_operacional' },
   { name: 'Fretes sobre Compras', type: 'despesa', group: 'custo_operacional' },
-  
   // DESPESAS COM PESSOAL
   { name: 'Salários e Ordenados', type: 'despesa', group: 'despesa_pessoal' },
   { name: 'Pró-Labore', type: 'despesa', group: 'despesa_pessoal' },
   { name: 'FGTS, INSS IRRF', type: 'despesa', group: 'despesa_pessoal' },
-
   // DESPESAS ADMINISTRATIVAS
   { name: 'Aluguel e Condomínio', type: 'despesa', group: 'despesa_administrativa' },
   { name: 'Energia, Água e Internet', type: 'despesa', group: 'despesa_administrativa' },
   { name: 'Material de Escritório e Limpeza', type: 'despesa', group: 'despesa_administrativa' },
   { name: 'Seguros', type: 'despesa', group: 'despesa_administrativa' },
   { name: 'Serviços de Terceiros (Contabilidade, Admin e Jurídico)', type: 'despesa', group: 'despesa_administrativa' },
-
   // DESPESAS OPERACIONAIS
   { name: 'Sistemas / Marketing e Publicidade', type: 'despesa', group: 'despesa_operacional' },
   { name: 'Combustível, Deslocamento / Manutenção e Reparos', type: 'despesa', group: 'despesa_operacional' },
-  
   // IMPOSTOS E DESPESAS FINANCEIRAS
   { name: 'Impostos sobre o Faturamento (DAS, ISS, ICMS)', type: 'despesa', group: 'impostos' },
   { name: 'Tarifas Bancárias/Juros e Multas Pagos', type: 'despesa', group: 'despesa_financeira' },
-
   // NÃO OPERACIONAIS
   { name: 'Distribuição de Lucros', type: 'despesa', group: 'nao_operacional' },
   { name: 'Serviços Eventuais Não Operacionais', type: 'despesa', group: 'nao_operacional' },
@@ -424,10 +416,13 @@ app.get('/api/categories', authenticateToken, (req, res) => {
             const stmt = db.prepare("INSERT INTO categories (user_id, name, type, group_type) VALUES (?, ?, ?, ?)");
             INITIAL_CATEGORIES_SEED.forEach(c => stmt.run(req.userId, c.name, c.type, c.group));
             stmt.finalize(() => {
-                db.all(`SELECT * FROM categories WHERE user_id = ?`, [req.userId], (err, newRows) => res.json(newRows));
+                db.all(`SELECT * FROM categories WHERE user_id = ?`, [req.userId], (err, newRows) => {
+                    res.json((newRows || []).map(r => ({ ...r, groupType: r.group_type })));
+                });
             });
         } else {
-            res.json(rows);
+            // CORREÇÃO: Mapeia group_type para groupType para o frontend
+            res.json((rows || []).map(r => ({ ...r, groupType: r.group_type })));
         }
     });
 });
@@ -554,7 +549,7 @@ app.get('/api/keyword-rules', authenticateToken, (req, res) => {
 });
 app.post('/api/keyword-rules', authenticateToken, (req, res) => {
     const { keyword, type, categoryId, bankId } = req.body;
-    db.run(`INSERT INTO keyword_rules (user_id, keyword, type, category_id, bank_id) VALUES (?, ?, ?, ?, ?)`, [req.userId, keyword, type, categoryId, bankId], function(err) { res.json({id: this.lastID}); });
+    db.run(`INSERT INTO keyword_rules (user_id, keyword, type, category_id, bank_id) VALUES (?, ?, ?, ?, ?)`, [req.userId, keyword, type, category_id, bank_id], function(err) { res.json({id: this.lastID}); });
 });
 app.delete('/api/keyword-rules/:id', authenticateToken, (req, res) => {
     db.run(`DELETE FROM keyword_rules WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err) => res.json({success: !err}));

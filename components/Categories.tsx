@@ -9,7 +9,7 @@ interface CategoriesProps {
   onUpdateCategory?: (category: Category) => void;
 }
 
-// Grupos baseados na nova estrutura de DRE e Seed d server.js
+// Grupos baseados na nova estrutura de DRE e Seed do server.js
 const INCOME_GROUPS = [
   {
     id: 'receita_bruta',
@@ -120,7 +120,11 @@ const Categories: React.FC<CategoriesProps> = ({ categories, onAddCategory, onDe
   const getGroupLabel = (groupId?: string, type?: CategoryType) => {
       if (!groupId) return 'Não Configurado';
       const list = type === CategoryType.INCOME ? INCOME_GROUPS : EXPENSE_GROUPS;
-      return list.find(g => g.id === groupId)?.label || groupId;
+      const found = list.find(g => g.id === groupId);
+      if (found) return found.label;
+      
+      // Caso não encontre pelo ID (IDs antigos ou customizados), formata o ID amigavelmente
+      return groupId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
   const activeGroupList = editingCategory?.type === CategoryType.INCOME ? INCOME_GROUPS : EXPENSE_GROUPS;
