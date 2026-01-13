@@ -244,7 +244,6 @@ const INITIAL_BANKS_SEED = [
   { name: 'Caixa Registradora', logo: '/logo/caixaf.png' },
 ];
 
-// Configuração completa com grupos DRE
 const INITIAL_CATEGORIES_SEED = [
     // RECEITAS
     { name: 'Vendas de Mercadorias', type: 'receita', group: 'receita_bruta' },
@@ -289,7 +288,9 @@ const ensureColumn = (table, column, definition) => {
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS global_banks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, logo TEXT)`);
-  db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password TEXT, cnpj TEXT, razao_social TEXT, phone TEXT, reset_token TEXT, reset_token_expires INTEGER)`);
+  db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password TEXT, cnpj TEXT, razao_social TEXT, phone TEXT, reset_token TEXT, reset_token_expires INTEGER, role TEXT DEFAULT 'user')`, (err) => {
+      if(!err) ensureColumn('users', 'role', "TEXT DEFAULT 'user'");
+  });
   db.run(`CREATE TABLE IF NOT EXISTS pending_signups (email TEXT PRIMARY KEY, token TEXT, cnpj TEXT, razao_social TEXT, phone TEXT, created_at INTEGER)`);
   db.run(`CREATE TABLE IF NOT EXISTS banks (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, name TEXT, account_number TEXT, nickname TEXT, logo TEXT, active INTEGER DEFAULT 1, balance REAL DEFAULT 0, FOREIGN KEY(user_id) REFERENCES users(id))`);
   
@@ -313,37 +314,189 @@ db.serialize(() => {
   });
 });
 
-// ... Routes (Auth, Admin, etc.) omitted for brevity, keeping relevant changes ...
+// --- ROTAS PÚBLICAS (SEM AUTENTICAÇÃO) ---
 
+app.post('/api/login', (req, res) => {
+    const { email, password } = req.body;
+    db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
+        if (err) return res.status(500).json({ error: "Erro no servidor" });
+        if (!user) return res.status(401).json({ error: "Usuário ou senha incorretos" });
+
+        const validPassword = bcrypt.compareSync(password, user.password);
+        if (!validPassword) return res.status(401).json({ error: "Usuário ou senha incorretos" });
+
+        const token = jwt.sign({ id: user.id, email: user.email, role: user.role || 'user' }, JWT_SECRET, { expiresIn: '24h' });
+        
+        logAudit(user.id, 'LOGIN', 'Login realizado com sucesso', req.ip);
+
+        res.json({ 
+            token, 
+            user: { 
+                id: user.id, 
+                email: user.email, 
+                razaoSocial: decrypt(user.razao_social), 
+                cnpj: decrypt(user.cnpj),
+                role: user.role
+            } 
+        });
+    });
+});
+
+app.post('/api/request-signup', (req, res) => {
+    const { email, cnpj, razaoSocial, phone } = req.body;
+    const token = crypto.randomBytes(32).toString('hex');
+    
+    // Check if user exists
+    db.get("SELECT id FROM users WHERE email = ?", [email], (err, row) => {
+        if(row) return res.status(400).json({ error: "Email já cadastrado." });
+
+        db.run(
+            `INSERT OR REPLACE INTO pending_signups (email, token, cnpj, razao_social, phone, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+            [email, token, encrypt(cnpj), encrypt(razaoSocial), encrypt(phone), Date.now()],
+            (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+                
+                const link = `${req.protocol}://${req.get('host')}/?action=finalize&token=${token}`;
+                sendEmail(email, "Finalize seu cadastro - Virgula Contábil", 
+                    `<p>Clique no link para criar sua senha e ativar sua conta:</p><a href="${link}">${link}</a>`
+                );
+                res.json({ message: "Link enviado" });
+            }
+        );
+    });
+});
+
+app.get('/api/validate-signup-token/:token', (req, res) => {
+    db.get("SELECT * FROM pending_signups WHERE token = ?", [req.params.token], (err, row) => {
+        if (!row) return res.status(404).json({ error: "Token inválido" });
+        res.json({ email: row.email, razaoSocial: decrypt(row.razao_social) });
+    });
+});
+
+app.post('/api/complete-signup', (req, res) => {
+    const { token, password } = req.body;
+    db.get("SELECT * FROM pending_signups WHERE token = ?", [token], (err, pending) => {
+        if (!pending) return res.status(400).json({ error: "Token inválido" });
+
+        const hash = bcrypt.hashSync(password, 10);
+        db.run(
+            `INSERT INTO users (email, password, cnpj, razao_social, phone) VALUES (?, ?, ?, ?, ?)`,
+            [pending.email, hash, pending.cnpj, pending.razao_social, pending.phone],
+            function (err) {
+                if (err) return res.status(500).json({ error: err.message });
+                const userId = this.lastID;
+                
+                // Seed Categories for new user
+                const stmt = db.prepare("INSERT INTO categories (user_id, name, type, group_type) VALUES (?, ?, ?, ?)");
+                INITIAL_CATEGORIES_SEED.forEach(c => stmt.run(userId, c.name, c.type, c.group));
+                stmt.finalize();
+
+                db.run("DELETE FROM pending_signups WHERE email = ?", [pending.email]);
+                
+                logAudit(userId, 'SIGNUP_COMPLETE', 'Cadastro finalizado', req.ip);
+                res.json({ success: true });
+            }
+        );
+    });
+});
+
+app.post('/api/recover-password', (req, res) => {
+    const { email } = req.body;
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = Date.now() + 3600000; // 1 hour
+
+    db.run("UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?", [token, expires, email], function(err) {
+        if (this.changes > 0) {
+            const link = `${req.protocol}://${req.get('host')}/?action=reset&token=${token}`;
+            sendEmail(email, "Recuperação de Senha", `<a href="${link}">Redefinir Senha</a>`);
+        }
+        res.json({ message: "Se o email existir, as instruções foram enviadas." });
+    });
+});
+
+app.post('/api/reset-password-confirm', (req, res) => {
+    const { token, newPassword } = req.body;
+    db.get("SELECT * FROM users WHERE reset_token = ? AND reset_token_expires > ?", [token, Date.now()], (err, user) => {
+        if (!user) return res.status(400).json({ error: "Link inválido ou expirado" });
+
+        const hash = bcrypt.hashSync(newPassword, 10);
+        db.run("UPDATE users SET password = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?", [hash, user.id], (err) => {
+            logAudit(user.id, 'PASSWORD_RESET', 'Senha redefinida via link', req.ip);
+            res.json({ success: true });
+        });
+    });
+});
+
+// --- ROTAS PROTEGIDAS (REQUEREM TOKEN) ---
+
+app.get('/api/global-banks', authenticateToken, (req, res) => {
+    db.all('SELECT * FROM global_banks ORDER BY name ASC', [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows || []);
+    });
+});
+
+// ROTAS DE BANCOS
+app.get('/api/banks', authenticateToken, (req, res) => {
+    db.all('SELECT * FROM banks WHERE user_id = ? ORDER BY active DESC, name ASC', [req.userId], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/api/banks', authenticateToken, (req, res) => {
+    const { name, accountNumber, nickname, logo } = req.body;
+    db.run(
+        `INSERT INTO banks (user_id, name, account_number, nickname, logo) VALUES (?, ?, ?, ?, ?)`,
+        [req.userId, name, accountNumber, nickname, logo],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            logAudit(req.userId, 'CREATE_BANK', `Criou banco ${name}`, req.ip);
+            res.json({ id: this.lastID });
+        }
+    );
+});
+
+app.put('/api/banks/:id', authenticateToken, (req, res) => {
+    const { nickname, active } = req.body;
+    db.run(
+        `UPDATE banks SET nickname = COALESCE(?, nickname), active = COALESCE(?, active) WHERE id = ? AND user_id = ?`,
+        [nickname, active, req.params.id, req.userId],
+        (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true });
+        }
+    );
+});
+
+app.delete('/api/banks/:id', authenticateToken, (req, res) => {
+    db.serialize(() => {
+        db.run("DELETE FROM transactions WHERE bank_id = ? AND user_id = ?", [req.params.id, req.userId]);
+        db.run("DELETE FROM forecasts WHERE bank_id = ? AND user_id = ?", [req.params.id, req.userId]);
+        db.run("DELETE FROM banks WHERE id = ? AND user_id = ?", [req.params.id, req.userId], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            logAudit(req.userId, 'DELETE_BANK', `Excluiu banco ID ${req.params.id}`, req.ip);
+            res.json({ success: true });
+        });
+    });
+});
+
+// ROTAS DE CATEGORIAS
 app.get('/api/categories', authenticateToken, (req, res) => {
     db.all(`SELECT * FROM categories WHERE user_id = ?`, [req.userId], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         
-        const existingNames = new Set(rows.map(r => r.name));
-        const missingCategories = INITIAL_CATEGORIES_SEED.filter(c => !existingNames.has(c.name));
-
-        if (missingCategories.length > 0) {
-            const stmt = db.prepare("INSERT INTO categories (user_id, name, type, group_type) VALUES (?, ?, ?, ?)");
-            missingCategories.forEach(c => {
-                stmt.run(req.userId, c.name, c.type, c.group);
-            });
-            stmt.finalize(() => {
-                db.all(`SELECT * FROM categories WHERE user_id = ? ORDER BY name ASC`, [req.userId], (err, newRows) => {
-                    res.json(newRows.map(r => ({
-                        id: r.id, 
-                        name: r.name, 
-                        type: r.type, 
-                        groupType: r.group_type // Map snake_case to camelCase
-                    })));
-                });
-            });
+        // Ensure default categories exist if user has none (fallback safety)
+        if (rows.length === 0) {
+             const stmt = db.prepare("INSERT INTO categories (user_id, name, type, group_type) VALUES (?, ?, ?, ?)");
+             INITIAL_CATEGORIES_SEED.forEach(c => stmt.run(req.userId, c.name, c.type, c.group));
+             stmt.finalize(() => {
+                 db.all(`SELECT * FROM categories WHERE user_id = ?`, [req.userId], (err, newRows) => {
+                     res.json(newRows.map(r => ({ id: r.id, name: r.name, type: r.type, groupType: r.group_type })));
+                 });
+             });
         } else {
-            res.json(rows.map(r => ({
-                id: r.id, 
-                name: r.name, 
-                type: r.type, 
-                groupType: r.group_type
-            })).sort((a,b) => a.name.localeCompare(b.name)));
+             res.json(rows.map(r => ({ id: r.id, name: r.name, type: r.type, groupType: r.group_type })).sort((a,b) => a.name.localeCompare(b.name)));
         }
     });
 });
@@ -379,21 +532,386 @@ app.delete('/api/categories/:id', authenticateToken, (req, res) => {
     });
 });
 
-// ... Remaining routes (Transactions, Banks, Reports, etc.) ...
-// Mantendo o restante das rotas como estavam, pois apenas categories teve mudança significativa no schema
-
-app.get('/api/global-banks', (req, res) => {
-    db.all('SELECT * FROM global_banks ORDER BY name ASC', [], (err, rows) => {
+// ROTAS DE TRANSAÇÕES
+app.get('/api/transactions', authenticateToken, (req, res) => {
+    db.all(`SELECT * FROM transactions WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT 5000`, [req.userId], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(rows || []);
+        res.json(rows.map(r => ({ ...r, reconciled: !!r.reconciled, categoryId: r.category_id, bankId: r.bank_id, ofxImportId: r.ofx_import_id })));
     });
 });
 
-// User routes (Banks, Transactions, etc.) - keep existing implementation
-app.use('/api', authenticateToken);
+app.post('/api/transactions', authenticateToken, (req, res) => {
+    const { date, description, value, type, categoryId, bankId, reconciled, ofxImportId } = req.body;
+    db.run(
+        `INSERT INTO transactions (user_id, date, description, value, type, category_id, bank_id, reconciled, ofx_import_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [req.userId, date, description, value, type, categoryId, bankId, reconciled ? 1 : 0, ofxImportId],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            // Update bank balance if reconciled
+            if (reconciled) {
+                const modifier = type === 'credito' ? 1 : -1;
+                db.run(`UPDATE banks SET balance = balance + ? WHERE id = ?`, [value * modifier, bankId]);
+            }
+            res.json({ id: this.lastID });
+        }
+    );
+});
 
-// ... (other route implementations) ...
+app.put('/api/transactions/:id', authenticateToken, (req, res) => {
+    const { date, description, value, type, categoryId, bankId, reconciled } = req.body;
+    
+    // First get old values to adjust balance
+    db.get(`SELECT * FROM transactions WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err, oldTx) => {
+        if (!oldTx) return res.status(404).json({ error: "Transação não encontrada" });
 
+        db.run(
+            `UPDATE transactions SET date=?, description=?, value=?, type=?, category_id=?, bank_id=?, reconciled=? WHERE id=? AND user_id=?`,
+            [date, description, value, type, categoryId, bankId, reconciled ? 1 : 0, req.params.id, req.userId],
+            (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+                
+                // Recalculate balance logic is complex here, simpler to just recalc bank balance from scratch or handle delta
+                // For simplicity/robustness, let's recalculate the bank balance entirely
+                recalculateBankBalance(bankId);
+                if (oldTx.bank_id !== bankId) recalculateBankBalance(oldTx.bank_id);
+
+                res.json({ success: true });
+            }
+        );
+    });
+});
+
+app.delete('/api/transactions/:id', authenticateToken, (req, res) => {
+    db.get(`SELECT bank_id FROM transactions WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err, row) => {
+        if (!row) return res.status(404).json({ error: "Não encontrado" });
+        
+        db.run(`DELETE FROM transactions WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            recalculateBankBalance(row.bank_id);
+            res.json({ success: true });
+        });
+    });
+});
+
+app.patch('/api/transactions/:id/reconcile', authenticateToken, (req, res) => {
+    const { reconciled } = req.body;
+    db.run(`UPDATE transactions SET reconciled = ? WHERE id = ? AND user_id = ?`, [reconciled ? 1 : 0, req.params.id, req.userId], function(err) {
+        if(err) return res.status(500).json({ error: err.message });
+        
+        // Update balance
+        db.get(`SELECT * FROM transactions WHERE id = ?`, [req.params.id], (err, tx) => {
+            if(tx) recalculateBankBalance(tx.bank_id);
+        });
+        
+        res.json({ success: true });
+    });
+});
+
+app.patch('/api/transactions/batch-update', authenticateToken, (req, res) => {
+    const { transactionIds, categoryId } = req.body;
+    const ids = transactionIds.join(',');
+    
+    db.run(
+        `UPDATE transactions SET category_id = ?, reconciled = 1 WHERE id IN (${ids}) AND user_id = ?`,
+        [categoryId, req.userId],
+        (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            // Recalculate all affected banks (simplified: recalc all user banks)
+            db.all(`SELECT DISTINCT bank_id FROM transactions WHERE id IN (${ids})`, [], (err, rows) => {
+                rows?.forEach(r => recalculateBankBalance(r.bank_id));
+            });
+            
+            res.json({ success: true });
+        }
+    );
+});
+
+// Helper for Balance Recalc
+function recalculateBankBalance(bankId) {
+    db.get(
+        `SELECT SUM(CASE WHEN type = 'credito' THEN value ELSE -value END) as balance 
+         FROM transactions WHERE bank_id = ? AND reconciled = 1`,
+        [bankId],
+        (err, row) => {
+            const newBalance = row && row.balance ? row.balance : 0;
+            db.run(`UPDATE banks SET balance = ? WHERE id = ?`, [newBalance, bankId]);
+        }
+    );
+}
+
+// ROTAS DE PREVISÕES
+app.get('/api/forecasts', authenticateToken, (req, res) => {
+    db.all(`SELECT * FROM forecasts WHERE user_id = ? ORDER BY date ASC`, [req.userId], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows.map(r => ({ ...r, realized: !!r.realized, categoryId: r.category_id, bankId: r.bank_id, installmentCurrent: r.installment_current, installmentTotal: r.installment_total, groupId: r.group_id })));
+    });
+});
+
+app.post('/api/forecasts', authenticateToken, (req, res) => {
+    const { date, description, value, type, categoryId, bankId, realized, installmentCurrent, installmentTotal, groupId } = req.body;
+    db.run(
+        `INSERT INTO forecasts (user_id, date, description, value, type, category_id, bank_id, realized, installment_current, installment_total, group_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [req.userId, date, description, value, type, categoryId, bankId, realized ? 1 : 0, installmentCurrent, installmentTotal, groupId],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID });
+        }
+    );
+});
+
+app.put('/api/forecasts/:id', authenticateToken, (req, res) => {
+    const { date, description, value, type, categoryId, bankId } = req.body;
+    db.run(
+        `UPDATE forecasts SET date=?, description=?, value=?, type=?, category_id=?, bank_id=? WHERE id=? AND user_id=?`,
+        [date, description, value, type, categoryId, bankId, req.params.id, req.userId],
+        (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true });
+        }
+    );
+});
+
+app.patch('/api/forecasts/:id/realize', authenticateToken, (req, res) => {
+    db.run(`UPDATE forecasts SET realized = 1 WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err) => {
+        if(err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
+app.delete('/api/forecasts/:id', authenticateToken, (req, res) => {
+    const mode = req.query.mode || 'single';
+    
+    if (mode === 'single') {
+        db.run(`DELETE FROM forecasts WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true });
+        });
+    } else {
+        db.get(`SELECT group_id, date FROM forecasts WHERE id = ?`, [req.params.id], (err, current) => {
+            if (!current || !current.group_id) {
+                // Fallback delete single if no group
+                return db.run(`DELETE FROM forecasts WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err) => {
+                    res.json({ success: true });
+                });
+            }
+
+            let sql = `DELETE FROM forecasts WHERE group_id = ? AND user_id = ?`;
+            const params = [current.group_id, req.userId];
+
+            if (mode === 'future') {
+                sql += ` AND date >= ?`;
+                params.push(current.date);
+            }
+
+            db.run(sql, params, (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ success: true });
+            });
+        });
+    }
+});
+
+// ROTAS DE OFX
+app.get('/api/ofx-imports', authenticateToken, (req, res) => {
+    db.all(`SELECT id, file_name, import_date, bank_id, transaction_count FROM ofx_imports WHERE user_id = ? ORDER BY import_date DESC`, [req.userId], (err, rows) => {
+        if(err) return res.status(500).json({ error: err.message });
+        res.json(rows.map(r => ({ ...r, fileName: r.file_name, importDate: r.import_date, bankId: r.bank_id, transactionCount: r.transaction_count })));
+    });
+});
+
+app.post('/api/ofx-imports', authenticateToken, (req, res) => {
+    const { fileName, importDate, bankId, transactionCount, content } = req.body;
+    db.run(
+        `INSERT INTO ofx_imports (user_id, file_name, import_date, bank_id, transaction_count, content) VALUES (?, ?, ?, ?, ?, ?)`,
+        [req.userId, fileName, importDate, bankId, transactionCount, content],
+        function(err) {
+            if(err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID });
+        }
+    );
+});
+
+app.delete('/api/ofx-imports/:id', authenticateToken, (req, res) => {
+    db.serialize(() => {
+        // Delete associated transactions first
+        db.run(`DELETE FROM transactions WHERE ofx_import_id = ? AND user_id = ?`, [req.params.id, req.userId]);
+        // Delete import record
+        db.run(`DELETE FROM ofx_imports WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], function(err) {
+            if(err) return res.status(500).json({ error: err.message });
+            res.json({ success: true });
+        });
+    });
+});
+
+// ROTAS DE REGRAS (KEYWORDS)
+app.get('/api/keyword-rules', authenticateToken, (req, res) => {
+    db.all(`SELECT * FROM keyword_rules WHERE user_id = ?`, [req.userId], (err, rows) => {
+        if(err) return res.status(500).json({ error: err.message });
+        res.json(rows.map(r => ({ ...r, categoryId: r.category_id, bankId: r.bank_id })));
+    });
+});
+
+app.post('/api/keyword-rules', authenticateToken, (req, res) => {
+    const { keyword, type, categoryId, bankId } = req.body;
+    db.run(
+        `INSERT INTO keyword_rules (user_id, keyword, type, category_id, bank_id) VALUES (?, ?, ?, ?, ?)`,
+        [req.userId, keyword, type, categoryId, bankId],
+        function(err) {
+            if(err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID });
+        }
+    );
+});
+
+app.delete('/api/keyword-rules/:id', authenticateToken, (req, res) => {
+    db.run(`DELETE FROM keyword_rules WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err) => {
+        if(err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
+// RELATÓRIOS
+app.get('/api/reports/cash-flow', authenticateToken, (req, res) => {
+    const { year, month } = req.query;
+    const startDate = new Date(year, month, 1).toISOString().split('T')[0];
+    const endDate = new Date(year, Number(month) + 1, 0).toISOString().split('T')[0];
+
+    db.all(
+        `SELECT * FROM transactions WHERE user_id = ? AND date >= ? AND date <= ? AND reconciled = 1`,
+        [req.userId, startDate, endDate],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            let totalReceitas = 0;
+            let totalDespesas = 0;
+            const receitasByCat = {};
+            const despesasByCat = {};
+
+            rows.forEach(t => {
+                if (t.type === 'credito') {
+                    totalReceitas += t.value;
+                    receitasByCat[t.category_id] = (receitasByCat[t.category_id] || 0) + t.value;
+                } else {
+                    totalDespesas += t.value;
+                    despesasByCat[t.category_id] = (despesasByCat[t.category_id] || 0) + t.value;
+                }
+            });
+
+            // Get Category Names
+            db.all(`SELECT id, name FROM categories WHERE user_id = ?`, [req.userId], (err, cats) => {
+                const catMap = {};
+                cats.forEach(c => catMap[c.id] = c.name);
+
+                const mapToArray = (obj) => Object.entries(obj).map(([id, val]) => ({ name: catMap[id] || 'Outros', value: val })).sort((a,b) => b.value - a.value);
+
+                // Calculate balances (initial from banks summation up to start date is heavy, simplified: get current banks balance - sum of future txs? No.
+                // Simplified approach: just show flow for the month)
+                
+                res.json({
+                    startBalance: 0, // Placeholder, requires complex calculation
+                    endBalance: totalReceitas - totalDespesas,
+                    totalReceitas,
+                    totalDespesas,
+                    receitasByCategory: mapToArray(receitasByCat),
+                    despesasByCategory: mapToArray(despesasByCat)
+                });
+            });
+        }
+    );
+});
+
+// Rota DRE Simplificada
+app.get('/api/reports/dre', authenticateToken, (req, res) => {
+    const { year, month } = req.query;
+    const startDate = new Date(year, month, 1).toISOString().split('T')[0];
+    const endDate = new Date(year, Number(month) + 1, 0).toISOString().split('T')[0];
+
+    // Join with categories to get group_type
+    db.all(
+        `SELECT t.value, t.type, c.group_type 
+         FROM transactions t 
+         LEFT JOIN categories c ON t.category_id = c.id
+         WHERE t.user_id = ? AND t.date >= ? AND t.date <= ? AND t.reconciled = 1`,
+        [req.userId, startDate, endDate],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const totals = {
+                receita_bruta: 0, impostos: 0, cmv: 0, 
+                despesa_operacional: 0, despesa_pessoal: 0, despesa_administrativa: 0,
+                receita_financeira: 0, despesa_financeira: 0,
+                receita_nao_operacional: 0, despesa_nao_operacional: 0,
+                outras_receitas: 0
+            };
+
+            rows.forEach(r => {
+                const val = r.value;
+                const group = r.group_type || (r.type === 'credito' ? 'outras_receitas' : 'despesa_operacional');
+                
+                if (totals[group] !== undefined) {
+                    totals[group] += val;
+                }
+            });
+
+            // Cálculos DRE
+            const receitaBruta = totals.receita_bruta + totals.outras_receitas;
+            const deducoes = totals.impostos; // Simplificado
+            const receitaLiquida = receitaBruta - deducoes;
+            const lucroBruto = receitaLiquida - totals.cmv;
+            
+            const totalDespesasOp = totals.despesa_operacional + totals.despesa_pessoal + totals.despesa_administrativa;
+            const resultadoOperacional = lucroBruto - totalDespesasOp;
+            
+            const resultadoFinanceiro = totals.receita_financeira - totals.despesa_financeira;
+            const resultadoNaoOperacional = totals.receita_nao_operacional - totals.despesa_nao_operacional;
+            
+            const resultadoAntesIR = resultadoOperacional + resultadoFinanceiro + resultadoNaoOperacional;
+            const lucroLiquido = resultadoAntesIR; // Sem IR calculado aqui
+
+            res.json({
+                receitaBruta,
+                deducoes,
+                receitaLiquida,
+                cmv: totals.cmv,
+                resultadoBruto: lucroBruto,
+                despesasOperacionais: totalDespesasOp,
+                resultadoOperacional,
+                resultadoFinanceiro,
+                resultadoNaoOperacional,
+                resultadoAntesImpostos: resultadoAntesIR,
+                impostos: 0, // IR/CSLL provision not implemented
+                lucroLiquido
+            });
+        }
+    );
+});
+
+// Admin Routes (Simplificado)
+app.get('/api/admin/users', authenticateToken, checkAdmin, (req, res) => {
+    db.all("SELECT id, email, cnpj, razao_social, phone, created_at FROM users", [], (err, rows) => {
+        if(err) return res.status(500).json({error: err.message});
+        res.json(rows.map(r => ({ ...r, cnpj: decrypt(r.cnpj), razao_social: decrypt(r.razao_social), phone: decrypt(r.phone) })));
+    });
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, checkAdmin, (req, res) => {
+    const id = req.params.id;
+    db.serialize(() => {
+        db.run("DELETE FROM transactions WHERE user_id = ?", [id]);
+        db.run("DELETE FROM forecasts WHERE user_id = ?", [id]);
+        db.run("DELETE FROM banks WHERE user_id = ?", [id]);
+        db.run("DELETE FROM categories WHERE user_id = ?", [id]);
+        db.run("DELETE FROM ofx_imports WHERE user_id = ?", [id]);
+        db.run("DELETE FROM users WHERE id = ?", [id], (err) => {
+            if(err) return res.status(500).json({error: err.message});
+            res.json({success: true});
+        });
+    });
+});
+
+// SPA Fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
