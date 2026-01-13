@@ -264,7 +264,7 @@ function App() {
       case 'banks': return <BankList banks={banksWithBalance} onUpdateBank={handleUpdateBank} onAddBank={handleAddBank} onDeleteBank={handleDeleteBank} />;
       case 'categories': return <Categories categories={categories} onAddCategory={handleAddCategory} onDeleteCategory={handleDeleteCategory} onUpdateCategory={handleUpdateCategory} />;
       case 'reports': return <Reports token={currentToken} transactions={transactions} categories={categories} />;
-      case 'forecasts': return <Forecasts token={currentToken} userId={user.id} banks={activeBanks} categories={categories} onUpdate={fetchInitialData} />;
+      case 'forecasts': return <Forecasts token={currentToken} userId={user.id} banks={activeBanks} categories={categories} onUpdate={fetchInitialData} onNavigate={setActiveTab} />;
       case 'tutorial': return <Tutorial />;
       default: return <Dashboard token={currentToken} userId={user.id} transactions={transactions} banks={activeBanks} forecasts={forecasts} categories={categories} onRefresh={fetchInitialData} />;
     }

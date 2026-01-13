@@ -171,12 +171,26 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
   const confirmRealization = async () => {
       if (!realizeModal.forecast || !realizeModal.date) return;
       const forecast = realizeModal.forecast;
-      const finalDate = realizeModal.date; // Use date from modal if we implemented editing
+      const finalDate = realizeModal.date;
 
       try {
-        // Backend agora cria a transação automaticamente
         await fetch(`/api/forecasts/${forecast.id}/realize`, { method: 'PATCH', headers: getHeaders() });
+        const descSuffix = forecast.installmentTotal ? ` (${forecast.installmentCurrent}/${forecast.installmentTotal})` : (forecast.groupId ? ' (Recorrente)' : '');
         
+        // Manual Creation of Transaction
+        await fetch('/api/transactions', {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({
+                date: finalDate,
+                description: forecast.description + descSuffix,
+                value: forecast.value,
+                type: forecast.type,
+                categoryId: forecast.categoryId,
+                bankId: forecast.bankId,
+                reconciled: false
+            })
+        });
         await onRefresh();
         setRealizeModal({ isOpen: false, forecast: null, date: '' });
         if (overdueForecasts.length <= 1) setIsOverdueModalOpen(false);
@@ -491,6 +505,154 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
               </table>
           </div>
       </div>
+
+      {/* Quick Add Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
+          <div className="relative bg-surface border border-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="px-6 py-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
+              <h3 className="font-semibold text-white">
+                  {formData.type === TransactionType.CREDIT ? 'Nova Receita' : 'Nova Despesa'}
+              </h3>
+              <button onClick={() => setIsModalOpen(false)}><X size={20} className="text-slate-400 hover:text-white"/></button>
+            </div>
+            <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                     <div>
+                         <label className="text-sm text-slate-400 font-medium">Data</label>
+                         <input 
+                            type="date"
+                            className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-primary"
+                            value={formData.date}
+                            onChange={e => setFormData({...formData, date: e.target.value})}
+                         />
+                     </div>
+                     <div>
+                         <label className="text-sm text-slate-400 font-medium">Valor</label>
+                         <input 
+                            type="number" step="0.01" required
+                            className={`w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 font-bold outline-none focus:border-primary ${formData.type === TransactionType.DEBIT ? 'text-rose-500' : 'text-emerald-500'}`}
+                            value={formData.value}
+                            onChange={e => setFormData({...formData, value: e.target.value})}
+                         />
+                     </div>
+                </div>
+                <div>
+                     <label className="text-sm text-slate-400 font-medium">Descrição</label>
+                     <input 
+                        type="text" required
+                        placeholder="Ex: Supermercado"
+                        className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-primary"
+                        value={formData.description}
+                        onChange={e => setFormData({...formData, description: e.target.value})}
+                     />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                     <div>
+                         <label className="text-sm text-slate-400 font-medium">Banco</label>
+                         <select 
+                            className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-primary"
+                            value={formData.bankId}
+                            onChange={e => setFormData({...formData, bankId: Number(e.target.value)})}
+                         >
+                             {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                         </select>
+                     </div>
+                     <div>
+                         <label className="text-sm text-slate-400 font-medium">Categoria</label>
+                         <select 
+                            className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-primary"
+                            value={formData.categoryId}
+                            onChange={e => setFormData({...formData, categoryId: Number(e.target.value)})}
+                         >
+                            <option value={0}>Selecione...</option>
+                             {availableCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                         </select>
+                     </div>
+                </div>
+                
+                {/* Options for Forecast/Transaction */}
+                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 flex gap-2">
+                    <button 
+                        onClick={() => handleQuickSave('transaction')} 
+                        className="flex-1 py-2 bg-primary text-slate-900 rounded-lg hover:bg-primaryHover font-medium text-sm flex justify-center items-center gap-1"
+                    >
+                        <CheckCircle2 size={16}/> Salvar Lançamento
+                    </button>
+                    <button 
+                        onClick={() => handleQuickSave('forecast')} 
+                        className="flex-1 py-2 bg-slate-800 text-slate-300 border border-slate-700 rounded-lg hover:bg-slate-700 font-medium text-sm flex justify-center items-center gap-1"
+                    >
+                        <CalendarClock size={16}/> Salvar como Previsão
+                    </button>
+                </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Realize Forecast Modal */}
+      {isOverdueModalOpen && overdueForecasts.length > 0 && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl max-h-[80vh] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col">
+                  <div className="p-6 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
+                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                          <AlertTriangle className="text-amber-500" size={20}/> Resolver Pendências
+                      </h3>
+                      <button onClick={() => setIsOverdueModalOpen(false)}><X size={20} className="text-slate-400 hover:text-white"/></button>
+                  </div>
+                  <div className="flex-1 overflow-auto p-4 custom-scroll space-y-2">
+                      {overdueForecasts.map(f => (
+                          <div key={f.id} className="flex items-center justify-between p-3 bg-slate-800/50 border border-slate-700 rounded-lg">
+                              <div>
+                                  <div className="flex items-center gap-2">
+                                      <span className="text-xs font-mono text-slate-400">{new Date(f.date).toLocaleDateString()}</span>
+                                      <span className="font-bold text-slate-200">{f.description}</span>
+                                  </div>
+                                  <div className="text-xs text-slate-500 mt-1">
+                                      {banks.find(b => b.id === f.bankId)?.name} • R$ {f.value.toFixed(2)}
+                                  </div>
+                              </div>
+                              <div className="flex gap-2">
+                                  <button onClick={() => openRealizeModal(f)} className="p-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-lg" title="Efetivar">
+                                      <Check size={16}/>
+                                  </button>
+                                  <button onClick={() => handleDeleteForecast(f.id)} className="p-2 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 rounded-lg" title="Excluir">
+                                      <Trash2 size={16}/>
+                                  </button>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Confirmation Modal for Realize */}
+      {realizeModal.isOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <div className="bg-surface border border-slate-700 w-full max-w-sm rounded-xl p-6 animate-in fade-in zoom-in duration-200">
+                  <h3 className="text-lg font-bold text-white mb-4">Confirmar Realização</h3>
+                  <div className="space-y-3 mb-6">
+                      <label className="block text-sm text-slate-400">Data da Efetivação</label>
+                      <input 
+                          type="date" 
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-primary"
+                          value={realizeModal.date}
+                          onChange={(e) => setRealizeModal(prev => ({ ...prev, date: e.target.value }))}
+                      />
+                      <p className="text-xs text-slate-500">
+                          Isso criará um lançamento financeiro oficial e atualizará o saldo da conta.
+                      </p>
+                  </div>
+                  <div className="flex gap-3">
+                      <button onClick={() => setRealizeModal({ isOpen: false, forecast: null, date: '' })} className="flex-1 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800">Cancelar</button>
+                      <button onClick={confirmRealization} className="flex-1 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-500">Confirmar</button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

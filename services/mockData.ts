@@ -22,59 +22,48 @@ export const INITIAL_BANKS: Bank[] = [
   { id: 19, name: 'Caixa Registradora', accountNumber: '-', nickname: 'Dinheiro Físico', logo: '/logo/caixaf.png', active: false, balance: 0 },
 ];
 
-const INCOME_CATEGORIES = [
-    'Vendas de Mercadorias',
-    'Prestação de Serviços',
-    'Receita de Aluguel',
-    'Comissões Recebidas',
-    'Receita Financeira (juros, rendimentos, aplicações)',
-    'Devoluções de Despesas',
-    'Reembolsos de Clientes',
-    'Transferências Internas (entre contas)',
-    'Aportes de Sócios / Investimentos',
-    'Outras Receitas Operacionais',
-    'Receitas Não Operacionais (ex: venda de ativo imobilizado)'
-];
-
-const EXPENSE_CATEGORIES = [
-    'Compra de Mercadorias / Matéria-Prima',
-    'Fretes e Transportes',
-    'Despesas com Pessoal (salários, pró-labore, encargos)',
-    'Serviços de Terceiros (contabilidade, marketing, consultorias)',
-    'Despesas Administrativas (papelaria, materiais de escritório)',
-    'Despesas Comerciais (comissões, propaganda, brindes)',
-    'Energia Elétrica / Água / Telefone / Internet',
-    'Aluguel e Condomínio',
-    'Manutenção e Limpeza',
-    'Combustível e Deslocamento',
-    'Seguros (veicular, empresarial, de vida, etc.)',
-    'Tarifas Bancárias e Juros',
-    'Impostos e Taxas (ISS, ICMS, DAS, etc.)',
-    'Despesas Financeiras (juros sobre empréstimos, multas, IOF)',
-    'Transferências Internas (entre contas)',
-    'Distribuição de Lucros / Retirada de Sócios',
-    'Outras Despesas Operacionais',
-    'Despesas Não Operacionais (venda de bens, baixas contábeis)'
-];
-
-let catIdCounter = 1;
-
+// Updated to match server.js INITIAL_CATEGORIES_SEED
 export const INITIAL_CATEGORIES: Category[] = [
-  ...INCOME_CATEGORIES.map(name => ({
-    id: catIdCounter++,
-    name,
-    type: CategoryType.INCOME
-  })),
-  ...EXPENSE_CATEGORIES.map(name => ({
-    id: catIdCounter++,
-    name,
-    type: CategoryType.EXPENSE
-  }))
+    // RECEITAS
+    { id: 1, name: 'Vendas de Mercadorias', type: CategoryType.INCOME, groupType: 'receita_bruta' },
+    { id: 2, name: 'Prestação de Serviços', type: CategoryType.INCOME, groupType: 'receita_bruta' },
+    { id: 3, name: 'Receita de Aluguel', type: CategoryType.INCOME, groupType: 'outras_receitas' },
+    { id: 4, name: 'Comissões Recebidas', type: CategoryType.INCOME, groupType: 'receita_bruta' },
+    { id: 5, name: 'Receita Financeira', type: CategoryType.INCOME, groupType: 'receita_financeira' },
+    { id: 6, name: 'Devoluções de Despesas', type: CategoryType.INCOME, groupType: 'receita_financeira' },
+    { id: 7, name: 'Reembolsos de Clientes', type: CategoryType.INCOME, groupType: 'outras_receitas' },
+    { id: 8, name: 'Transferências Internas', type: CategoryType.INCOME, groupType: 'nao_operacional' },
+    { id: 9, name: 'Aportes de Sócios / Investimentos', type: CategoryType.INCOME, groupType: 'nao_operacional' },
+    { id: 10, name: 'Outras Receitas Operacionais', type: CategoryType.INCOME, groupType: 'outras_receitas' },
+    { id: 11, name: 'Venda de Ativo Imobilizado', type: CategoryType.INCOME, groupType: 'receita_nao_operacional' },
+    
+    // DESPESAS
+    { id: 12, name: 'Compra de Mercadorias', type: CategoryType.EXPENSE, groupType: 'cmv' },
+    { id: 13, name: 'Matéria-Prima', type: CategoryType.EXPENSE, groupType: 'cmv' },
+    { id: 14, name: 'Fretes sobre Compras', type: CategoryType.EXPENSE, groupType: 'cmv' },
+    { id: 15, name: 'Embalagens', type: CategoryType.EXPENSE, groupType: 'cmv' },
+    { id: 16, name: 'Salários e Ordenados', type: CategoryType.EXPENSE, groupType: 'despesa_pessoal' },
+    { id: 17, name: 'Pró-Labore', type: CategoryType.EXPENSE, groupType: 'despesa_pessoal' },
+    { id: 18, name: 'Vale Transporte / Alimentação', type: CategoryType.EXPENSE, groupType: 'despesa_pessoal' },
+    { id: 19, name: 'Encargos Sociais (FGTS/INSS)', type: CategoryType.EXPENSE, groupType: 'despesa_pessoal' },
+    { id: 20, name: 'Aluguel e Condomínio', type: CategoryType.EXPENSE, groupType: 'despesa_administrativa' },
+    { id: 21, name: 'Energia / Água / Telefone', type: CategoryType.EXPENSE, groupType: 'despesa_administrativa' },
+    { id: 22, name: 'Internet e Sistemas', type: CategoryType.EXPENSE, groupType: 'despesa_administrativa' },
+    { id: 23, name: 'Material de Escritório/Limpeza', type: CategoryType.EXPENSE, groupType: 'despesa_administrativa' },
+    { id: 24, name: 'Contabilidade e Jurídico', type: CategoryType.EXPENSE, groupType: 'despesa_administrativa' },
+    { id: 25, name: 'Marketing e Publicidade', type: CategoryType.EXPENSE, groupType: 'despesa_operacional' },
+    { id: 26, name: 'Comissões de Vendas', type: CategoryType.EXPENSE, groupType: 'despesa_operacional' },
+    { id: 27, name: 'Combustível e Viagens', type: CategoryType.EXPENSE, groupType: 'despesa_operacional' },
+    { id: 28, name: 'DAS - Simples Nacional', type: CategoryType.EXPENSE, groupType: 'impostos' },
+    { id: 29, name: 'ICMS / ISS a Recolher', type: CategoryType.EXPENSE, groupType: 'impostos' },
+    { id: 30, name: 'Taxas e Alvarás', type: CategoryType.EXPENSE, groupType: 'impostos' },
+    { id: 31, name: 'Tarifas Bancárias', type: CategoryType.EXPENSE, groupType: 'despesa_financeira' },
+    { id: 32, name: 'Juros Pagos', type: CategoryType.EXPENSE, groupType: 'despesa_financeira' },
+    { id: 33, name: 'Antecipação de Recebíveis', type: CategoryType.EXPENSE, groupType: 'despesa_financeira' },
+    { id: 34, name: 'Distribuição de Lucros', type: CategoryType.EXPENSE, groupType: 'nao_operacional' },
+    { id: 35, name: 'Empréstimos (Pagamento Principal)', type: CategoryType.EXPENSE, groupType: 'nao_operacional' },
+    { id: 36, name: 'Transferência entre Contas', type: CategoryType.EXPENSE, groupType: 'nao_operacional' }
 ];
 
 export const INITIAL_TRANSACTIONS: Transaction[] = [];
-
-export const INITIAL_FORECASTS: Forecast[] = [
-  { id: 1, date: new Date().toISOString().split('T')[0], description: 'Aluguel Futuro', value: 1500, type: TransactionType.DEBIT, realized: false, bankId: 1, categoryId: 19 },
-  { id: 2, date: new Date().toISOString().split('T')[0], description: 'Venda Prevista', value: 3000, type: TransactionType.CREDIT, realized: false, bankId: 1, categoryId: 1 },
-];
+export const INITIAL_FORECASTS: Forecast[] = [];

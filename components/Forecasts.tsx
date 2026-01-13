@@ -8,9 +8,10 @@ interface ForecastsProps {
   banks: Bank[];
   categories: Category[];
   onUpdate: () => void;
+  onNavigate: (tab: string) => void;
 }
 
-const Forecasts: React.FC<ForecastsProps> = ({ token, userId, banks, categories, onUpdate }) => {
+const Forecasts: React.FC<ForecastsProps> = ({ token, userId, banks, categories, onUpdate, onNavigate }) => {
   const [forecasts, setForecasts] = useState<Forecast[]>([]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -165,17 +166,34 @@ const Forecasts: React.FC<ForecastsProps> = ({ token, userId, banks, categories,
       }
   };
 
-  const handleRealize = async (id: number) => {
+  const handleRealize = async (forecast: Forecast) => {
       if(confirm('Confirmar realização desta previsão? Ela será movida para Lançamentos.')) {
            try {
-               // Backend now handles creation of transaction automatically
-               await fetch(`/api/forecasts/${id}/realize`, { 
+               await fetch(`/api/forecasts/${forecast.id}/realize`, { 
                    method: 'PATCH',
                    headers: getHeaders()
                 });
                
+               const descSuffix = forecast.installmentTotal ? ` (${forecast.installmentCurrent}/${forecast.installmentTotal})` : (forecast.groupId ? ' (Recorrente)' : '');
+               
+               // Manual Creation of Transaction from Frontend
+               await fetch('/api/transactions', {
+                   method: 'POST',
+                   headers: getHeaders(),
+                   body: JSON.stringify({
+                       date: forecast.date,
+                       description: forecast.description + descSuffix,
+                       value: forecast.value,
+                       type: forecast.type,
+                       categoryId: forecast.categoryId,
+                       bankId: forecast.bankId,
+                       reconciled: false
+                   })
+               });
+
                await fetchForecasts();
                onUpdate(); // Trigger global update
+               onNavigate('transactions'); // Redireciona para a aba de lançamentos
            } catch (e) {
                alert("Erro ao efetivar");
            }
@@ -331,7 +349,7 @@ const Forecasts: React.FC<ForecastsProps> = ({ token, userId, banks, categories,
                                    <td className="px-6 py-3 text-center flex justify-center gap-2">
                                        {!f.realized && (
                                            <>
-                                            <button onClick={() => handleRealize(f.id)} className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded hover:bg-emerald-500/20" title="Efetivar">
+                                            <button onClick={() => handleRealize(f)} className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded hover:bg-emerald-500/20" title="Efetivar">
                                                 <Check size={16}/>
                                             </button>
                                             <button onClick={() => handleEditClick(f)} className="p-1.5 bg-sky-500/10 text-sky-500 rounded hover:bg-sky-500/20" title="Editar">
