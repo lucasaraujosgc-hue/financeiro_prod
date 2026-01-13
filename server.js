@@ -16,9 +16,15 @@ import https from 'https';
 // --- CONFIGURAÇÃO DE SEGURANÇA E AMBIENTE (LGPD) ---
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
 
-// Credenciais de Admin do .env
-const ADMIN_EMAIL = process.env.EMAIL_ADMIN;
+// Credenciais de Admin do .env (Suporte a EMAIL_ADMIN ou MAIL_ADMIN conforme solicitado)
+const ADMIN_EMAIL = process.env.EMAIL_ADMIN || process.env.MAIL_ADMIN;
 const ADMIN_PASSWORD = process.env.PASSWORD_ADMIN;
+
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+    console.warn("⚠️  AVISO: Credenciais de Admin não configuradas no .env (EMAIL_ADMIN/MAIL_ADMIN e PASSWORD_ADMIN). O login de Admin não funcionará.");
+} else {
+    console.log(`✅ Admin configurado para o email: ${ADMIN_EMAIL}`);
+}
 
 let keyBuffer;
 if (process.env.ENCRYPTION_KEY) {
@@ -248,38 +254,52 @@ const INITIAL_BANKS_SEED = [
   { name: 'Caixa Registradora', logo: '/logo/caixaf.png' },
 ];
 
-// CATEGORIAS SEED - LISTA OTIMIZADA E LIMPA
-// Removemos duplicatas e padronizamos os nomes.
+// CATEGORIAS SEED - LISTA OTIMIZADA E UNIFICADA
+// Todas as duplicatas foram removidas.
 const INITIAL_CATEGORIES_SEED = [
     // RECEITAS
     { name: 'Vendas de Mercadorias', type: 'receita', group: 'receita_bruta' },
     { name: 'Prestação de Serviços', type: 'receita', group: 'receita_bruta' },
     { name: 'Comissões Recebidas', type: 'receita', group: 'receita_bruta' },
+    
+    { name: 'Receita Financeira', type: 'receita', group: 'receita_financeira' },
+    
     { name: 'Receita de Aluguel', type: 'receita', group: 'outras_receitas' },
     { name: 'Outras Receitas Operacionais', type: 'receita', group: 'outras_receitas' },
     { name: 'Reembolsos de Clientes', type: 'receita', group: 'outras_receitas' },
-    { name: 'Receita Financeira (juros, rendimentos)', type: 'receita', group: 'receita_financeira' },
-    { name: 'Receitas Não Operacionais (venda de ativo)', type: 'receita', group: 'receita_nao_operacional' },
+    
+    { name: 'Venda de Ativo Imobilizado', type: 'receita', group: 'receita_nao_operacional' },
+    
     { name: 'Aportes de Sócios / Investimentos', type: 'receita', group: 'nao_operacional' },
-    { name: 'Transferências Internas', type: 'receita', group: 'nao_operacional' },
+    { name: 'Transferências Internas (Entrada)', type: 'receita', group: 'nao_operacional' },
 
     // DESPESAS
-    { name: 'Compra de Mercadorias / Matéria-Prima', type: 'despesa', group: 'cmv' },
-    { name: 'Fretes e Transportes', type: 'despesa', group: 'cmv' },
-    { name: 'Despesas com Pessoal (salários, pró-labore)', type: 'despesa', group: 'despesa_pessoal' },
-    { name: 'Distribuição de Lucros / Retirada', type: 'despesa', group: 'nao_operacional' },
-    { name: 'Aluguel e Condomínio', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Energia Elétrica / Água / Telefone / Internet', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Serviços de Terceiros (contabilidade, marketing)', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Despesas Comerciais (comissões, propaganda)', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Combustível e Deslocamento', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Despesas Administrativas (papelaria, escritório)', type: 'despesa', group: 'despesa_administrativa' },
+    { name: 'Compra de Mercadorias (CMV)', type: 'despesa', group: 'cmv' },
+    { name: 'Custos de Serviços Prestados', type: 'despesa', group: 'cmv' },
+    { name: 'Fretes sobre Compras', type: 'despesa', group: 'cmv' },
+    
+    { name: 'Salários e Ordenados', type: 'despesa', group: 'despesa_pessoal' },
+    { name: 'Pró-Labore', type: 'despesa', group: 'despesa_pessoal' },
+    { name: 'Benefícios e Encargos Sociais', type: 'despesa', group: 'despesa_pessoal' },
+    
+    { name: 'Aluguel e Condomínio', type: 'despesa', group: 'despesa_administrativa' },
+    { name: 'Energia, Água e Internet', type: 'despesa', group: 'despesa_administrativa' },
+    { name: 'Material de Escritório e Limpeza', type: 'despesa', group: 'despesa_administrativa' },
     { name: 'Seguros', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Manutenção e Limpeza', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Impostos e Taxas (ISS, ICMS, DAS)', type: 'despesa', group: 'impostos' },
-    { name: 'Despesas Financeiras (juros, multas)', type: 'despesa', group: 'despesa_financeira' },
-    { name: 'Despesas Não Operacionais (baixas contábeis)', type: 'despesa', group: 'despesa_nao_operacional' },
-    { name: 'Transferências Internas (entre contas)', type: 'despesa', group: 'nao_operacional' }
+    { name: 'Serviços de Contabilidade/Jurídico', type: 'despesa', group: 'despesa_administrativa' },
+    
+    { name: 'Marketing e Publicidade', type: 'despesa', group: 'despesa_operacional' },
+    { name: 'Combustível e Deslocamento', type: 'despesa', group: 'despesa_operacional' },
+    { name: 'Manutenção e Reparos', type: 'despesa', group: 'despesa_operacional' },
+    { name: 'Softwares e Licenças', type: 'despesa', group: 'despesa_operacional' },
+    
+    { name: 'Impostos e Taxas (DAS, ISS, ICMS)', type: 'despesa', group: 'impostos' },
+    
+    { name: 'Tarifas Bancárias', type: 'despesa', group: 'despesa_financeira' },
+    { name: 'Juros e Multas Pagos', type: 'despesa', group: 'despesa_financeira' },
+    
+    { name: 'Distribuição de Lucros', type: 'despesa', group: 'nao_operacional' },
+    { name: 'Transferências Internas (Saída)', type: 'despesa', group: 'nao_operacional' }
 ];
 
 const ensureColumn = (table, column, definition) => {
@@ -308,9 +328,13 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS keyword_rules (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, keyword TEXT, type TEXT, category_id INTEGER, bank_id INTEGER, FOREIGN KEY(user_id) REFERENCES users(id))`);
   db.run(`CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, action TEXT, details TEXT, ip_address TEXT, created_at TEXT)`);
   
-  // Seed Global Banks
+  // Seed Global Banks - Garante que execute após a criação da tabela
+  // O uso de db.get dentro do serialize coloca a operação na fila de execução do SQLite
   db.get("SELECT COUNT(*) as count FROM global_banks", [], (err, row) => {
-      if (!err && row && row.count === 0) {
+      if (err) {
+          console.error("Erro ao verificar bancos globais:", err);
+      } else if (row && row.count === 0) {
+          console.log("Semeando bancos globais...");
           const stmt = db.prepare("INSERT INTO global_banks (name, logo) VALUES (?, ?)");
           INITIAL_BANKS_SEED.forEach(b => stmt.run(b.name, b.logo));
           stmt.finalize();
@@ -324,19 +348,26 @@ app.post('/api/login', (req, res) => {
     const { email, password } = req.body;
 
     // 1. Verificar Login de Admin via ENV
-    if (ADMIN_EMAIL && ADMIN_PASSWORD && email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+    // Usa trim() para evitar erros com espaços em branco acidentais no .env
+    const safeAdminEmail = ADMIN_EMAIL ? ADMIN_EMAIL.trim() : null;
+    const safeAdminPass = ADMIN_PASSWORD ? ADMIN_PASSWORD.trim() : null;
+    const inputEmail = email ? email.trim() : '';
+    const inputPass = password ? password.trim() : '';
+
+    if (safeAdminEmail && safeAdminPass && inputEmail === safeAdminEmail && inputPass === safeAdminPass) {
         const token = jwt.sign(
-            { id: 0, email: email, role: 'admin' }, 
+            { id: 0, email: inputEmail, role: 'admin' }, 
             JWT_SECRET, 
             { expiresIn: '12h' }
         );
         logAudit('0', 'LOGIN_ADMIN', 'Login de Admin realizado via ENV', req.ip);
+        console.log("Admin logged in via ENV credentials");
         
         return res.json({ 
             token, 
             user: { 
                 id: 0, 
-                email: email, 
+                email: inputEmail, 
                 razaoSocial: 'Administrador do Sistema', 
                 cnpj: '00000000000000',
                 role: 'admin'
@@ -413,7 +444,7 @@ app.post('/api/complete-signup', (req, res) => {
                 if (err) return res.status(500).json({ error: err.message });
                 const userId = this.lastID;
                 
-                // Seed Categories for new user
+                // Seed Categories for new user - Usando a lista limpa
                 const stmt = db.prepare("INSERT INTO categories (user_id, name, type, group_type) VALUES (?, ?, ?, ?)");
                 INITIAL_CATEGORIES_SEED.forEach(c => stmt.run(userId, c.name, c.type, c.group));
                 stmt.finalize();
