@@ -29,10 +29,12 @@ const Transactions: React.FC<TransactionsProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  // Batch Mode States
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedBatchIds, setSelectedBatchIds] = useState<number[]>([]);
   const [batchCategoryId, setBatchCategoryId] = useState<number>(0);
+
+  const activeBanks = banks.filter(b => b.active);
+  const activeBankIds = activeBanks.map(b => b.id);
 
   const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -41,7 +43,7 @@ const Transactions: React.FC<TransactionsProps> = ({
     description: '',
     value: '',
     type: TransactionType.DEBIT,
-    bankId: banks[0]?.id || 0,
+    bankId: activeBanks[0]?.id || 0,
     categoryId: 0, 
   });
 
@@ -52,7 +54,7 @@ const Transactions: React.FC<TransactionsProps> = ({
         description: '',
         value: '',
         type: TransactionType.DEBIT,
-        bankId: banks[0]?.id || 0,
+        bankId: activeBanks[0]?.id || 0,
         categoryId: 0, 
        });
     }
@@ -91,8 +93,9 @@ const Transactions: React.FC<TransactionsProps> = ({
 
   const filteredTransactions = transactions.filter(t => {
     if (!t.date) return false;
+    // Oculta transações de bancos arquivados, exceto se estiver filtrando especificamente por um (o que não deve acontecer no dropdown, mas é safe)
+    if (!activeBankIds.includes(t.bankId)) return false; 
     
-    // Ajuste para pegar UTC ou local date corretamente ao dividir a string YYYY-MM-DD
     const parts = t.date.split('-');
     if (parts.length < 2) return false;
 
@@ -127,7 +130,7 @@ const Transactions: React.FC<TransactionsProps> = ({
       type: formData.type,
       bankId: Number(formData.bankId),
       categoryId: Number(formData.categoryId),
-      reconciled: editingId ? true : false // Auto-reconcile on edit
+      reconciled: editingId ? true : false 
     };
 
     if (editingId) {
@@ -146,7 +149,6 @@ const Transactions: React.FC<TransactionsProps> = ({
       : c.type === CategoryType.EXPENSE
   );
 
-  // Batch Handlers
   const toggleBatchMode = () => {
       setIsBatchMode(!isBatchMode);
       setSelectedBatchIds([]);
@@ -189,7 +191,6 @@ const Transactions: React.FC<TransactionsProps> = ({
         </h1>
        </div>
 
-      {/* Filters Header */}
       <div className="bg-surface p-4 rounded-xl border border-slate-800 shadow-sm flex flex-col md:flex-row items-end md:items-center justify-between gap-4">
            {!isBatchMode ? (
                <>
@@ -210,7 +211,7 @@ const Transactions: React.FC<TransactionsProps> = ({
                             onChange={e => setSelectedBankId(e.target.value === 'all' ? 'all' : Number(e.target.value))}
                         >
                             <option value="all">Todos os Bancos</option>
-                            {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            {activeBanks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                         </select>
                     </div>
                 </div>
@@ -231,7 +232,6 @@ const Transactions: React.FC<TransactionsProps> = ({
                 </div>
                </>
            ) : (
-               /* Batch Mode Header */
                <div className="w-full flex items-center justify-between bg-indigo-900/20 p-2 rounded-lg border border-indigo-500/30 animate-in fade-in slide-in-from-top-2">
                    <div className="flex items-center gap-4">
                        <span className="text-indigo-400 font-bold px-2">{selectedBatchIds.length} selecionados</span>
@@ -267,7 +267,6 @@ const Transactions: React.FC<TransactionsProps> = ({
            )}
       </div>
 
-       {/* Month Navigation & Summary */}
        {!isBatchMode && (
         <div className="bg-surface rounded-xl border border-slate-800 shadow-sm overflow-hidden">
             <div className="flex flex-col lg:flex-row">
@@ -297,7 +296,6 @@ const Transactions: React.FC<TransactionsProps> = ({
         </div>
        )}
 
-      {/* Internal Search */}
       <div className="bg-surface px-4 py-2 border border-slate-800 rounded-lg shadow-sm flex items-center gap-4 overflow-x-auto custom-scroll">
         <div className="flex-1 relative min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
@@ -355,7 +353,6 @@ const Transactions: React.FC<TransactionsProps> = ({
         </select>
       </div>
 
-      {/* Table */}
       <div className="bg-surface border border-slate-800 rounded-xl shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/30 flex justify-between items-center">
             <h3 className="font-semibold text-slate-200">Lançamentos Detalhados</h3>
@@ -471,7 +468,6 @@ const Transactions: React.FC<TransactionsProps> = ({
         </div>
       </div>
 
-      {/* Modal (Add/Edit) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
@@ -552,7 +548,7 @@ const Transactions: React.FC<TransactionsProps> = ({
                         value={formData.bankId}
                         onChange={e => setFormData({...formData, bankId: Number(e.target.value)})}
                     >
-                        {banks.map(b => (
+                        {activeBanks.map(b => (
                             <option key={b.id} value={b.id}>{b.name}</option>
                         ))}
                     </select>

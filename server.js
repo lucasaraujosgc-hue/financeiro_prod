@@ -247,7 +247,7 @@ db.serialize(() => {
   });
 });
 
-// --- ROTAS DE AUTENTICAÇÃO (UNIFICADAS E CORRIGIDAS) ---
+// --- ROTAS DE AUTENTICAÇÃO ---
 
 app.post('/api/login', (req, res) => {
     const { email, password } = req.body;
@@ -284,12 +284,36 @@ app.post('/api/request-signup', (req, res) => {
     
     db.get("SELECT id FROM users WHERE email = ?", [email], (err, row) => {
         if(row) return res.status(400).json({ error: "Email já cadastrado." });
+        
+        const safeCnpj = encrypt(cnpj);
+        const safeRazao = encrypt(razaoSocial);
+        const safePhone = encrypt(phone);
+
         db.run(`INSERT OR REPLACE INTO pending_signups (email, token, cnpj, razao_social, phone, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-            [email, token, encrypt(cnpj), encrypt(razaoSocial), encrypt(phone), Date.now()],
-            (err) => {
+            [email, token, safeCnpj, safeRazao, safePhone, Date.now()],
+            async function(err) {
                 if (err) return res.status(500).json({ error: err.message });
+                
                 const link = `${req.protocol}://${req.get('host')}/?action=finalize&token=${token}`;
-                sendEmail(email, "Ative sua conta - Virgula", `<a href="${link}">Definir Senha</a>`);
+                const html = `
+                <div style="font-family: 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8fafc; padding: 20px; border-radius: 8px;">
+                    <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; border: 1px solid #e2e8f0; text-align: center;">
+                        <h1 style="color: #10b981; margin: 0 0 20px 0;">Definir Senha de Acesso</h1>
+                        <p style="color: #334155; font-size: 16px; margin-bottom: 30px;">
+                            Olá, <strong>${razaoSocial}</strong>. Seus dados foram recebidos.
+                            <br>Clique no botão abaixo para definir sua senha e ativar sua conta.
+                        </p>
+                        <a href="${link}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                            Definir Minha Senha
+                        </a>
+                        <p style="color: #94a3b8; font-size: 12px; margin-top: 30px;">
+                            Link válido por 24 horas.
+                        </p>
+                    </div>
+                </div>
+                `;
+                
+                await sendEmail(email, "Ative sua conta - Virgula Contábil", html);
                 res.json({ message: "Link enviado" });
             }
         );
@@ -303,7 +327,7 @@ app.get('/api/validate-signup-token/:token', (req, res) => {
     });
 });
 
-// ROTA CRÍTICA: CADASTRO COMPLETO COM SEED DE BANCOS
+// ROTA CRÍTICA: CADASTRO COMPLETO (SEM SEED DE BANCOS)
 app.post('/api/complete-signup', (req, res) => {
     const { token, password } = req.body;
     db.get("SELECT * FROM pending_signups WHERE token = ?", [token], (err, pending) => {
@@ -321,14 +345,7 @@ app.post('/api/complete-signup', (req, res) => {
                 INITIAL_CATEGORIES_SEED.forEach(c => stmtCat.run(userId, c.name, c.type, c.group));
                 stmtCat.finalize();
 
-                // 2. Seed Banks (Cópia dos Globais)
-                db.all("SELECT * FROM global_banks", [], (err, banks) => {
-                    if(!err && banks && banks.length > 0) {
-                        const stmtBank = db.prepare("INSERT INTO banks (user_id, name, account_number, nickname, logo) VALUES (?, ?, ?, ?, ?)");
-                        banks.forEach(b => stmtBank.run(userId, b.name, '0000-0', b.name, b.logo));
-                        stmtBank.finalize();
-                    }
-                });
+                // 2. Bancos: NÃO INSERE NADA AUTOMATICAMENTE. O USUÁRIO CADASTRA DEPOIS.
 
                 db.run("DELETE FROM pending_signups WHERE email = ?", [pending.email]);
                 logAudit(userId, 'SIGNUP', 'Completo', req.ip);
@@ -344,7 +361,20 @@ app.post('/api/recover-password', (req, res) => {
     db.run("UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?", [token, Date.now()+3600000, email], function(err) {
         if(this.changes > 0) {
             const link = `${req.protocol}://${req.get('host')}/?action=reset&token=${token}`;
-            sendEmail(email, "Recuperação", `<a href="${link}">Redefinir</a>`);
+            const html = `
+            <div style="font-family: 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8fafc; padding: 20px; border-radius: 8px;">
+            <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; border: 1px solid #e2e8f0; text-align: center;">
+                <h1 style="color: #10b981; margin: 0 0 20px 0;">Recuperação de Senha</h1>
+                <p style="color: #334155; font-size: 16px; margin-bottom: 30px;">
+                    Recebemos uma solicitação para redefinir a senha.
+                </p>
+                <a href="${link}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                    Redefinir Minha Senha
+                </a>
+            </div>
+            </div>
+            `;
+            sendEmail(email, "Recuperação de Senha - Virgula Contábil", html);
         }
         res.json({ message: "Enviado se existir." });
     });
@@ -787,6 +817,7 @@ app.put('/api/admin/banks/:id', authenticateToken, checkAdmin, (req, res) => {
             } catch (e) {}
         }
         db.run('UPDATE global_banks SET name = ?, logo = ? WHERE id = ?', [name, logoPath, req.params.id], function(err) {
+            // Propagate updates to all user banks with same name
             db.run('UPDATE banks SET name = ?, logo = ? WHERE name = ?', [name, logoPath, row.name]);
             res.json({ success: true });
         });

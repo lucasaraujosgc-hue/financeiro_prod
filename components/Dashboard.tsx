@@ -27,13 +27,16 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
   const [currentMonth, setCurrentMonth] = useState<number>(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear());
 
+  const activeBanks = banks.filter(b => b.active);
+  const activeBankIds = activeBanks.map(b => b.id);
+
   const [formData, setFormData] = useState({
       description: '',
       value: '',
       type: TransactionType.DEBIT,
       date: new Date().toISOString().split('T')[0],
       categoryId: 0,
-      bankId: 0,
+      bankId: activeBanks[0]?.id || 0,
       installments: 1,
       isFixed: false
   });
@@ -69,21 +72,20 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
   const overdueForecasts = forecasts.filter(f => {
       const fDate = new Date(f.date);
       const fDateMidnight = new Date(fDate.getFullYear(), fDate.getMonth(), fDate.getDate());
-      return fDateMidnight < startOfSelectedMonth && !f.realized;
+      return fDateMidnight < startOfSelectedMonth && !f.realized && activeBankIds.includes(f.bankId);
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const allPendingForecasts = forecasts.filter(f => !f.realized);
+  const allPendingForecasts = forecasts.filter(f => !f.realized && activeBankIds.includes(f.bankId));
 
   const currentMonthTransactions = transactions.filter(t => {
       const d = new Date(t.date);
-      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear && activeBankIds.includes(t.bankId);
   });
 
   const recentTransactions = [...currentMonthTransactions]
       .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 5);
 
-  // Calculate Category Analysis
   const getTopCategories = (type: TransactionType) => {
       const filtered = currentMonthTransactions.filter(t => t.type === type);
       const total = filtered.reduce((acc, t) => acc + t.value, 0);
@@ -102,15 +104,15 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
               percent: total > 0 ? (Number(value) / total) * 100 : 0 
           }))
           .sort((a, b) => b.value - a.value)
-          .slice(0, 4); // Top 4 categories
+          .slice(0, 4);
   };
 
   const topIncomeCategories = getTopCategories(TransactionType.CREDIT);
   const topExpenseCategories = getTopCategories(TransactionType.DEBIT);
 
-  // GLOBAL BALANCE LOGIC: Sum of ALL transactions (Reconciled + Pending)
-  const allTimeIncome = transactions.filter(t => t.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
-  const allTimeExpense = transactions.filter(t => t.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
+  // GLOBAL BALANCE LOGIC (Only active banks)
+  const allTimeIncome = transactions.filter(t => t.type === TransactionType.CREDIT && activeBankIds.includes(t.bankId)).reduce((acc, curr) => acc + curr.value, 0);
+  const allTimeExpense = transactions.filter(t => t.type === TransactionType.DEBIT && activeBankIds.includes(t.bankId)).reduce((acc, curr) => acc + curr.value, 0);
   const totalBalance = allTimeIncome - allTimeExpense;
 
   const monthRealizedIncome = currentMonthTransactions.filter(t => t.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
@@ -118,19 +120,16 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
 
   const currentMonthForecasts = forecasts.filter(f => {
       const d = new Date(f.date);
-      return d.getMonth() === currentMonth && d.getFullYear() === currentYear && !f.realized;
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear && !f.realized && activeBankIds.includes(f.bankId);
   });
 
   const monthForecastIncome = currentMonthForecasts.filter(f => f.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
   const monthForecastExpense = currentMonthForecasts.filter(f => f.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
 
-  // Chart Data
   const chartData = [
       { name: 'Receita', value: monthRealizedIncome },
       { name: 'Despesa', value: monthRealizedExpense },
   ];
-
-  // --- Modal & Action Handlers ---
 
   const openModal = (type: TransactionType) => {
       setFormData({
@@ -139,7 +138,7 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
           type: type,
           date: new Date().toISOString().split('T')[0],
           categoryId: 0,
-          bankId: banks[0]?.id || 0,
+          bankId: activeBanks[0]?.id || 0,
           installments: 1,
           isFixed: false
       });
@@ -206,9 +205,7 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
       const installments = formData.isFixed ? 60 : Math.max(1, Math.floor(Number(formData.installments)));
 
       try {
-          // If explicitly chosen as forecast OR if there are multiple installments, treat as forecast logic
           if (target === 'forecast') {
-              // SAVE AS FORECAST
               for (let i = 0; i < installments; i++) {
                   const currentDate = new Date(baseDate);
                   currentDate.setMonth(baseDate.getMonth() + i);
@@ -226,7 +223,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
                   });
               }
           } else {
-              // SAVE AS TRANSACTION (Only the first one, others as forecast if recurrent)
               for (let i = 0; i < installments; i++) {
                   const currentDate = new Date(baseDate);
                   currentDate.setMonth(baseDate.getMonth() + i);
@@ -235,7 +231,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
                   const currentInstallment = i + 1;
                   
                   if (i === 0) {
-                      // First one goes to Transactions
                       const descSuffix = isRecurrent ? (formData.isFixed ? ' (Fixo)' : ` (${currentInstallment}/${installments})`) : '';
                       await fetch('/api/transactions', {
                            method: 'POST', headers: getHeaders(),
@@ -245,7 +240,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
                            })
                        });
                   } else {
-                      // Rest go to Forecasts
                       await fetch('/api/forecasts', {
                           method: 'POST', headers: getHeaders(),
                           body: JSON.stringify({
@@ -268,8 +262,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
 
   return (
     <div className="space-y-4 pb-4">
-      
-      {/* Overdue Alert Banner */}
       {overdueForecasts.length > 0 && (
           <div onClick={() => setIsOverdueModalOpen(true)} className="bg-amber-950/40 border border-amber-500/30 p-3 rounded-xl cursor-pointer hover:bg-amber-900/40 transition-all group">
               <div className="flex items-center justify-between">
@@ -287,7 +279,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
           </div>
       )}
 
-      {/* Header with Navigation */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-3">
         <div>
             <div className="flex items-center gap-2 mb-0.5">
@@ -303,9 +294,7 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
         </div>
       </div>
 
-      {/* Top Cards (Summary) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Balance */}
         <div className="bg-slate-900 rounded-xl p-4 border border-slate-800 relative overflow-hidden group">
             <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <Wallet size={48} className="text-slate-400"/>
@@ -317,7 +306,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
             </div>
         </div>
 
-        {/* Income */}
         <div className="bg-slate-900 rounded-xl p-4 border border-slate-800 relative overflow-hidden group">
             <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <CheckCircle2 size={48} className="text-emerald-500"/>
@@ -329,7 +317,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
             </div>
         </div>
 
-        {/* Expense */}
         <div className="bg-slate-900 rounded-xl p-4 border border-slate-800 relative overflow-hidden group">
             <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <ShieldCheck size={48} className="text-rose-500"/>
@@ -342,15 +329,14 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
         </div>
       </div>
 
-      {/* Middle Row: Banks & Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         
-        {/* Bank Balances */}
         <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col">
              <h3 className="font-bold text-white mb-4 text-xs uppercase tracking-wider text-slate-400">Saldos por Banco</h3>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto max-h-[300px] custom-scroll pr-1">
-                {banks.filter(b => b.active).map(bank => {
-                    // Calculate ACTUAL (Transactions)
+                {activeBanks.length === 0 ? (
+                    <div className="col-span-2 text-center py-4 text-slate-500 text-sm">Nenhum banco ativo. Cadastre uma conta.</div>
+                ) : activeBanks.map(bank => {
                     const bankTransactions = transactions.filter(t => t.bankId === bank.id);
                     const bankBalance = bankTransactions.reduce((acc, t) => {
                         const val = Number(t.value);
@@ -359,7 +345,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
                         return acc - val;
                     }, 0);
 
-                    // Calculate FORECAST (Future)
                     const bankPendingForecasts = allPendingForecasts.filter(f => f.bankId === bank.id);
                     const forecastsTotal = bankPendingForecasts.reduce((acc, f) => {
                         const val = Number(f.value);
@@ -404,7 +389,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
              </div>
         </div>
 
-        {/* Chart */}
         <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col">
             <h3 className="font-bold text-white mb-4 text-xs uppercase tracking-wider text-slate-400">Receita x Despesa (Mensal)</h3>
             <div className="flex-1 w-full h-40">
@@ -430,7 +414,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
 
       {/* Analysis Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Income Analysis */}
           <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
               <h3 className="font-bold text-white mb-4 text-xs uppercase tracking-wider text-slate-400">Análise de Receitas</h3>
               <div className="space-y-3">
@@ -449,7 +432,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
               </div>
           </div>
 
-          {/* Expense Analysis */}
           <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
               <h3 className="font-bold text-white mb-4 text-xs uppercase tracking-wider text-slate-400">Análise de Despesas</h3>
               <div className="space-y-3">
@@ -469,7 +451,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
           </div>
       </div>
 
-      {/* Detailed Transactions Table */}
       <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center bg-slate-950/50">
               <h3 className="font-bold text-white text-xs uppercase tracking-wider text-slate-400">Últimos 5 Lançamentos - {MONTHS[currentMonth]} / {currentYear}</h3>
@@ -531,7 +512,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
           </div>
       </div>
 
-       {/* Overdue Items Modal and other modals omitted for brevity, but they are part of the component structure */}
        {isOverdueModalOpen && (
          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setIsOverdueModalOpen(false)} />
@@ -601,114 +581,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
          </div>
        )}
 
-       {selectedBankForForecasts && (
-           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-               <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSelectedBankForForecasts(null)} />
-               <div className="relative bg-surface border border-slate-800 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                   <div className="px-6 py-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
-                       <h3 className="font-bold text-white flex items-center gap-2">
-                           <Calculator size={18} className="text-primary"/>
-                           Previsões Pendentes - {banks.find(b => b.id === selectedBankForForecasts)?.name}
-                       </h3>
-                       <button onClick={() => setSelectedBankForForecasts(null)}><X size={20} className="text-slate-400 hover:text-white"/></button>
-                   </div>
-                   <div className="p-6 overflow-y-auto max-h-[60vh] custom-scroll">
-                       {allPendingForecasts.filter(f => f.bankId === selectedBankForForecasts).length === 0 ? (
-                           <div className="text-center text-slate-500 py-8">Nenhuma previsão pendente para este banco.</div>
-                       ) : (
-                           <table className="w-full text-sm text-left">
-                               <thead className="text-slate-400 font-medium border-b border-slate-800">
-                                   <tr>
-                                       <th className="pb-3 pl-2">Data</th>
-                                       <th className="pb-3">Descrição</th>
-                                       <th className="pb-3 text-right">Valor</th>
-                                       <th className="pb-3 text-center">Ações</th>
-                                   </tr>
-                               </thead>
-                               <tbody className="divide-y divide-slate-800">
-                                   {allPendingForecasts
-                                       .filter(f => f.bankId === selectedBankForForecasts)
-                                       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                                       .map(f => (
-                                       <tr key={f.id} className="hover:bg-slate-800/30 transition-colors">
-                                           <td className="py-3 pl-2 text-slate-300 font-mono text-xs">
-                                               {new Date(f.date).toLocaleDateString('pt-BR')}
-                                           </td>
-                                           <td className="py-3 font-medium text-slate-200">
-                                               {f.description}
-                                               {f.installmentTotal ? (
-                                                    <span className="ml-2 text-xs bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">
-                                                        {f.installmentCurrent}/{f.installmentTotal}
-                                                    </span>
-                                                ) : null}
-                                           </td>
-                                           <td className={`py-3 text-right font-bold ${f.type === TransactionType.DEBIT ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                               R$ {f.value.toFixed(2)}
-                                           </td>
-                                           <td className="py-3 flex justify-center gap-2">
-                                               <button 
-                                                   onClick={() => openRealizeModal(f)}
-                                                   className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded hover:bg-emerald-500/20 border border-emerald-500/20"
-                                                   title="Efetivar Lançamento"
-                                               >
-                                                   <Check size={16}/>
-                                               </button>
-                                               <button 
-                                                   onClick={() => handleDeleteForecast(f.id)}
-                                                   className="p-1.5 bg-rose-500/10 text-rose-500 rounded hover:bg-rose-500/20 border border-rose-500/20"
-                                                   title="Excluir Previsão"
-                                               >
-                                                   <Trash2 size={16}/>
-                                               </button>
-                                           </td>
-                                       </tr>
-                                   ))}
-                               </tbody>
-                           </table>
-                       )}
-                   </div>
-               </div>
-           </div>
-       )}
-
-       {/* Realize With Date Modal */}
-       {realizeModal.isOpen && (
-           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-               <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setRealizeModal({ ...realizeModal, isOpen: false })} />
-               <div className="relative bg-surface border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in zoom-in duration-200">
-                   <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                       <Calendar size={20} className="text-emerald-500"/> Confirmar Efetivação
-                   </h3>
-                   <div className="space-y-4">
-                       <div>
-                           <label className="text-xs font-semibold text-slate-500 uppercase">Descrição</label>
-                           <p className="text-white font-medium">{realizeModal.forecast?.description}</p>
-                       </div>
-                       <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase">Valor</label>
-                            <p className={`font-bold ${realizeModal.forecast?.type === TransactionType.DEBIT ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                R$ {realizeModal.forecast?.value.toFixed(2)}
-                            </p>
-                       </div>
-                       <div>
-                           <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">Data da Efetivação</label>
-                           <input 
-                               type="date"
-                               required
-                               className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2 text-white outline-none focus:border-emerald-500"
-                               value={realizeModal.date}
-                               onChange={(e) => setRealizeModal({ ...realizeModal, date: e.target.value })}
-                           />
-                       </div>
-                       <div className="flex gap-3 pt-2">
-                           <button onClick={() => setRealizeModal({ ...realizeModal, isOpen: false })} className="flex-1 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800">Cancelar</button>
-                           <button onClick={confirmRealization} className="flex-1 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 font-medium">Confirmar</button>
-                       </div>
-                   </div>
-               </div>
-           </div>
-       )}
-
        {/* Quick Add Modal */}
        {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -760,7 +632,7 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
                             value={formData.bankId}
                             onChange={e => setFormData({...formData, bankId: Number(e.target.value)})}
                          >
-                             {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                             {activeBanks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                          </select>
                      </div>
                      <div>
