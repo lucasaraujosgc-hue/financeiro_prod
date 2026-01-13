@@ -202,6 +202,7 @@ const Forecasts: React.FC<ForecastsProps> = ({ userId, banks, categories, onUpda
   };
 
   const filteredForecasts = forecasts.filter(f => {
+      // Uso de split para garantir que a data string '2023-05-01' seja tratada como tal, sem conversão de fuso
       const [y, m] = f.date.split('-'); 
       const yearMatch = parseInt(y) === selectedYear;
       const monthMatch = (parseInt(m) - 1) === selectedMonth;

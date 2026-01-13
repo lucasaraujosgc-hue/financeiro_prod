@@ -76,6 +76,14 @@ const Reports: React.FC<ReportsProps> = () => {
       return date.toISOString().split('T')[0];
   });
 
+  const getHeaders = () => {
+      const token = localStorage.getItem('finance_app_token');
+      return {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+      };
+  };
+
   // Sync Cycle Dates with Selected Month
   useEffect(() => {
       const start = new Date(year, month, 1);
@@ -97,9 +105,7 @@ const Reports: React.FC<ReportsProps> = () => {
   const fetchData = async () => {
       setLoading(true);
       setData(null); // Clear data immediately to avoid stale render crash
-      const userId = localStorage.getItem('finance_app_auth') ? JSON.parse(localStorage.getItem('finance_app_auth')!).id : null;
-      if (!userId) return;
-
+      
       let endpoint = '';
       if (activeTab === 'cashflow') endpoint = `/api/reports/cash-flow?year=${year}&month=${month}`;
       if (activeTab === 'dre') endpoint = `/api/reports/dre?year=${year}&month=${month}`;
@@ -108,7 +114,7 @@ const Reports: React.FC<ReportsProps> = () => {
 
       try {
           const res = await fetch(endpoint, {
-              headers: { 'user-id': String(userId) }
+              headers: getHeaders()
           });
           if (res.ok) {
               setData(await res.json());
@@ -121,12 +127,9 @@ const Reports: React.FC<ReportsProps> = () => {
   };
 
   const fetchCycleData = async () => {
-      const userId = localStorage.getItem('finance_app_auth') ? JSON.parse(localStorage.getItem('finance_app_auth')!).id : null;
-      if (!userId) return;
-
       try {
           const res = await fetch(`/api/reports/daily-flow?startDate=${cycleStartDate}&endDate=${cycleEndDate}`, {
-              headers: { 'user-id': String(userId) }
+              headers: getHeaders()
           });
           if (res.ok) {
               setCycleData(await res.json());

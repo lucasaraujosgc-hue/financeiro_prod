@@ -256,19 +256,39 @@ const INITIAL_BANKS_SEED = [
   { name: 'Caixa Registradora', logo: '/logo/caixaf.png' },
 ];
 
+// LISTA COMPLETA DE CATEGORIAS
 const INITIAL_CATEGORIES_SEED = [
+    // RECEITAS
     { name: 'Vendas de Mercadorias', type: 'receita' },
     { name: 'Prestação de Serviços', type: 'receita' },
     { name: 'Receita de Aluguel', type: 'receita' },
     { name: 'Comissões Recebidas', type: 'receita' },
-    { name: 'Receita Financeira', type: 'receita' },
-    { name: 'Outras Receitas', type: 'receita' },
-    { name: 'Compra de Mercadorias', type: 'despesa' },
-    { name: 'Despesas com Pessoal', type: 'despesa' },
-    { name: 'Despesas Administrativas', type: 'despesa' },
-    { name: 'Impostos e Taxas', type: 'despesa' },
+    { name: 'Receita Financeira (juros, rendimentos)', type: 'receita' },
+    { name: 'Devoluções de Despesas', type: 'receita' },
+    { name: 'Reembolsos de Clientes', type: 'receita' },
+    { name: 'Transferências Internas', type: 'receita' },
+    { name: 'Aportes de Sócios / Investimentos', type: 'receita' },
+    { name: 'Outras Receitas Operacionais', type: 'receita' },
+    { name: 'Receitas Não Operacionais (venda de ativo)', type: 'receita' },
+    // DESPESAS
+    { name: 'Compra de Mercadorias / Matéria-Prima', type: 'despesa' },
+    { name: 'Fretes e Transportes', type: 'despesa' },
+    { name: 'Despesas com Pessoal (salários, pró-labore)', type: 'despesa' },
+    { name: 'Serviços de Terceiros (contabilidade, marketing)', type: 'despesa' },
+    { name: 'Despesas Administrativas (papelaria, escritório)', type: 'despesa' },
+    { name: 'Despesas Comerciais (comissões, propaganda)', type: 'despesa' },
+    { name: 'Energia Elétrica / Água / Telefone / Internet', type: 'despesa' },
+    { name: 'Aluguel e Condomínio', type: 'despesa' },
+    { name: 'Manutenção e Limpeza', type: 'despesa' },
+    { name: 'Combustível e Deslocamento', type: 'despesa' },
+    { name: 'Seguros', type: 'despesa' },
+    { name: 'Tarifas Bancárias e Juros', type: 'despesa' },
+    { name: 'Impostos e Taxas (ISS, ICMS, DAS)', type: 'despesa' },
     { name: 'Despesas Financeiras', type: 'despesa' },
-    { name: 'Pró-Labore', type: 'despesa' }
+    { name: 'Transferências Internas', type: 'despesa' },
+    { name: 'Distribuição de Lucros / Retirada', type: 'despesa' },
+    { name: 'Outras Despesas Operacionais', type: 'despesa' },
+    { name: 'Despesas Não Operacionais', type: 'despesa' }
 ];
 
 const ensureColumn = (table, column, definition) => {
@@ -688,10 +708,25 @@ app.delete('/api/banks/:id', (req, res) => {
     });
 });
 
+// GET CATEGORIES com AUTO-SEED
 app.get('/api/categories', (req, res) => {
     db.all(`SELECT * FROM categories WHERE user_id = ?`, [req.userId], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+        
+        // Se usuário não tiver categorias, insere as padrão e retorna
+        if (rows.length === 0) {
+            const stmt = db.prepare("INSERT INTO categories (user_id, name, type) VALUES (?, ?, ?)");
+            INITIAL_CATEGORIES_SEED.forEach(c => {
+                stmt.run(req.userId, c.name, c.type);
+            });
+            stmt.finalize(() => {
+                db.all(`SELECT * FROM categories WHERE user_id = ?`, [req.userId], (err, newRows) => {
+                    res.json(newRows);
+                });
+            });
+        } else {
+            res.json(rows);
+        }
     });
 });
 
