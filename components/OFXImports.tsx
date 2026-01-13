@@ -3,6 +3,7 @@ import { Bank, OFXImport, Transaction, TransactionType, KeywordRule } from '../t
 import { FileUp, Trash2, Calendar, Database, FileSpreadsheet, AlertTriangle, ArrowRight, Save, X, Loader2 } from 'lucide-react';
 
 interface OFXImportsProps {
+  token: string;
   userId: number;
   banks: Bank[];
   keywordRules: KeywordRule[];
@@ -17,7 +18,7 @@ interface ConflictingTransaction {
     action: 'keep_old' | 'replace_with_new';
 }
 
-const OFXImports: React.FC<OFXImportsProps> = ({ userId, banks, keywordRules, transactions, onTransactionsImported }) => {
+const OFXImports: React.FC<OFXImportsProps> = ({ token, userId, banks, keywordRules, transactions, onTransactionsImported }) => {
   const [imports, setImports] = useState<OFXImport[]>([]);
   const [importConfig, setImportConfig] = useState({
     bankId: banks[0]?.id || 0,
@@ -40,7 +41,7 @@ const OFXImports: React.FC<OFXImportsProps> = ({ userId, banks, keywordRules, tr
 
   const getHeaders = () => ({
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${localStorage.getItem('finance_app_token')}`
+      'Authorization': `Bearer ${token}`
   });
 
   // Load Imports History

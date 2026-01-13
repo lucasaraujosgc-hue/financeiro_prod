@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Users, LayoutDashboard, FileText, Trash2, LogOut, ShieldAlert, BarChart, Eye, X, Download, Calendar, Receipt, ArrowUpRight, FileSpreadsheet, Landmark, Plus, Upload, Edit2, Save, Ban, Search, Printer } from 'lucide-react';
 
 interface AdminPanelProps {
+  token: string;
   onLogout: () => void;
 }
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'audit' | 'banks'>('dashboard');
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
@@ -28,7 +29,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
 
   // CORREÇÃO: Usar o Token JWT para autenticação correta no servidor
   const getHeaders = () => {
-      const token = localStorage.getItem('finance_app_token');
       return {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`

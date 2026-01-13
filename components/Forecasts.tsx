@@ -3,13 +3,14 @@ import { Bank, Category, Forecast, TransactionType, CategoryType } from '../type
 import { ChevronLeft, ChevronRight, Plus, Check, Trash2, CalendarDays, Edit2, Repeat, Infinity, X } from 'lucide-react';
 
 interface ForecastsProps {
+  token: string;
   userId: number;
   banks: Bank[];
   categories: Category[];
   onUpdate: () => void;
 }
 
-const Forecasts: React.FC<ForecastsProps> = ({ userId, banks, categories, onUpdate }) => {
+const Forecasts: React.FC<ForecastsProps> = ({ token, userId, banks, categories, onUpdate }) => {
   const [forecasts, setForecasts] = useState<Forecast[]>([]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -34,7 +35,6 @@ const Forecasts: React.FC<ForecastsProps> = ({ userId, banks, categories, onUpda
   const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
   const getHeaders = () => {
-      const token = localStorage.getItem('finance_app_token');
       return {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`

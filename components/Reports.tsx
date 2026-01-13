@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
 import { ChevronLeft, ChevronRight, Filter, Download, CalendarRange, Percent, Activity, TrendingUp, Info, Target, AlertCircle, CheckCircle } from 'lucide-react';
 
 interface ReportsProps {
+  token: string;
   transactions: Transaction[];
   categories: Category[];
 }
@@ -57,7 +58,7 @@ const READINGS = {
     ]
 };
 
-const Reports: React.FC<ReportsProps> = () => {
+const Reports: React.FC<ReportsProps> = ({ token }) => {
   const [activeTab, setActiveTab] = useState<'cashflow' | 'dre' | 'analysis' | 'forecasts'>('cashflow');
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth());
@@ -77,7 +78,6 @@ const Reports: React.FC<ReportsProps> = () => {
   });
 
   const getHeaders = () => {
-      const token = localStorage.getItem('finance_app_token');
       return {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`

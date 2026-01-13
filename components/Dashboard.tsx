@@ -4,6 +4,7 @@ import { ArrowUpCircle, ArrowDownCircle, Wallet, AlertCircle, CheckCircle2, Tren
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface DashboardProps {
+  token: string;
   userId: number;
   transactions: Transaction[];
   banks: Bank[];
@@ -12,7 +13,7 @@ interface DashboardProps {
   onRefresh: () => Promise<void>;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, forecasts, categories, onRefresh }) => {
+const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, banks, forecasts, categories, onRefresh }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isOverdueModalOpen, setIsOverdueModalOpen] = useState(false);
   
@@ -42,7 +43,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, transactions, banks, fore
 
   const getHeaders = () => ({
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${localStorage.getItem('finance_app_token')}`
+      'Authorization': `Bearer ${token}`
   });
 
   const handlePrevMonth = () => {

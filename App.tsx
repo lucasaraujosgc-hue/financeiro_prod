@@ -45,15 +45,17 @@ function App() {
         else if (action === 'reset') setAuthView('reset');
         window.history.replaceState({}, document.title, window.location.pathname);
     } else {
-        const savedToken = localStorage.getItem('finance_app_token');
-        const savedUser = localStorage.getItem('finance_app_user');
+        // Tenta recuperar de localStorage (Persistente) ou sessionStorage (Sessão atual)
+        const savedToken = localStorage.getItem('finance_app_token') || sessionStorage.getItem('finance_app_token');
+        const savedUser = localStorage.getItem('finance_app_user') || sessionStorage.getItem('finance_app_user');
+        
         if (savedToken && savedUser) {
             try {
                 setToken(savedToken);
                 setUser(JSON.parse(savedUser));
                 setIsAuthenticated(true);
             } catch (e) {
-                localStorage.removeItem('finance_app_token');
+                handleLogout();
             }
         }
     }
@@ -65,29 +67,26 @@ function App() {
     }
   }, [isAuthenticated, token, user]);
 
-  // CÁLCULO DE SALDO REAL (APENAS CONCILIADO)
-  // O saldo exibido como "Atual" nos bancos deve ser apenas o dinheiro que realmente aconteceu.
   const banksWithBalance = useMemo(() => {
       return banks.map(bank => {
-          // Filtra apenas transações deste banco que estão CONCILIADAS
           const bankTxs = transactions.filter(t => t.bankId === bank.id && t.reconciled);
-          
           const balance = bankTxs.reduce((acc, t) => {
               const val = Math.abs(t.value);
               const isCredit = t.type === 'credito' || String(t.type).toLowerCase().includes('receita');
               return isCredit ? acc + val : acc - val;
           }, 0);
-          
           return { ...bank, balance };
       });
   }, [banks, transactions]);
 
-  // JWT Helper
+  // JWT Helper - Usa o token do estado para garantir sincronia
   const apiFetch = async (url: string, options: RequestInit = {}) => {
-      const storedToken = localStorage.getItem('finance_app_token');
+      // Prioriza o token do estado, mas faz fallback para storage
+      const activeToken = token || localStorage.getItem('finance_app_token') || sessionStorage.getItem('finance_app_token');
+      
       const headers = { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${storedToken}`,
+          'Authorization': `Bearer ${activeToken}`,
           ...options.headers 
       };
       const res = await fetch(url, { ...options, headers });
@@ -110,7 +109,6 @@ function App() {
           ]);
       } catch (e: any) {
           console.error("Erro ao carregar dados", e);
-          // Evita travar a tela se for apenas erro de login (o handleLogout já resolveu)
           if (e.message !== "Sessão expirada") {
               setIsAppError(true);
           }
@@ -186,11 +184,16 @@ function App() {
 
   const handleLogout = () => {
       setIsAuthenticated(false);
-      setIsAppError(false); // Limpa erro ao sair
+      setIsAppError(false);
       setUser(null);
       setToken(null);
+      
+      // Limpa ambos os storages para garantir logout completo
       localStorage.removeItem('finance_app_token');
       localStorage.removeItem('finance_app_user');
+      sessionStorage.removeItem('finance_app_token');
+      sessionStorage.removeItem('finance_app_user');
+      
       setAuthView('login');
   };
 
@@ -203,9 +206,14 @@ function App() {
             setUser(responseData.user);
             setToken(responseData.token);
             setIsAuthenticated(true);
+            
+            // Lógica Correta de Storage
             if (rememberMe) {
                 localStorage.setItem('finance_app_token', responseData.token);
                 localStorage.setItem('finance_app_user', JSON.stringify(responseData.user));
+            } else {
+                sessionStorage.setItem('finance_app_token', responseData.token);
+                sessionStorage.setItem('finance_app_user', JSON.stringify(responseData.user));
             }
         } else {
             const err = await res.json();
@@ -238,22 +246,23 @@ function App() {
     return <Login onLogin={handleLogin} onForgotPassword={() => setAuthView('forgot')} onSignUp={() => setAuthView('signup')} isLoading={isLoading} />;
   }
 
-  if (user?.role === 'admin') return <AdminPanel onLogout={handleLogout} />;
+  if (user?.role === 'admin') return <AdminPanel token={token || ''} onLogout={handleLogout} />;
 
   const activeBanks = banksWithBalance.filter(b => b.active);
+  const currentToken = token || '';
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard': return <Dashboard userId={user.id} transactions={transactions} banks={activeBanks} forecasts={forecasts} categories={categories} onRefresh={fetchInitialData} />;
+      case 'dashboard': return <Dashboard token={currentToken} userId={user.id} transactions={transactions} banks={activeBanks} forecasts={forecasts} categories={categories} onRefresh={fetchInitialData} />;
       case 'transactions': return <Transactions userId={user.id} transactions={transactions} banks={activeBanks} categories={categories} onAddTransaction={handleAddTransaction} onEditTransaction={handleEditTransaction} onDeleteTransaction={handleDeleteTransaction} onReconcile={handleReconcile} onBatchUpdate={handleBatchUpdateTransaction} />;
-      case 'import': return <OFXImports userId={user.id} banks={activeBanks} keywordRules={keywordRules} transactions={transactions} onTransactionsImported={fetchInitialData} />;
+      case 'import': return <OFXImports token={currentToken} userId={user.id} banks={activeBanks} keywordRules={keywordRules} transactions={transactions} onTransactionsImported={fetchInitialData} />;
       case 'rules': return <KeywordRules categories={categories} rules={keywordRules} banks={activeBanks} onAddRule={handleAddKeywordRule} onDeleteRule={handleDeleteKeywordRule} />;
       case 'banks': return <BankList banks={banksWithBalance} onUpdateBank={handleUpdateBank} onAddBank={handleAddBank} onDeleteBank={handleDeleteBank} />;
       case 'categories': return <Categories categories={categories} onAddCategory={handleAddCategory} onDeleteCategory={handleDeleteCategory} onUpdateCategory={handleUpdateCategory} />;
-      case 'reports': return <Reports transactions={transactions} categories={categories} />;
-      case 'forecasts': return <Forecasts userId={user.id} banks={activeBanks} categories={categories} onUpdate={fetchInitialData} />;
+      case 'reports': return <Reports token={currentToken} transactions={transactions} categories={categories} />;
+      case 'forecasts': return <Forecasts token={currentToken} userId={user.id} banks={activeBanks} categories={categories} onUpdate={fetchInitialData} />;
       case 'tutorial': return <Tutorial />;
-      default: return <Dashboard userId={user.id} transactions={transactions} banks={activeBanks} forecasts={forecasts} categories={categories} onRefresh={fetchInitialData} />;
+      default: return <Dashboard token={currentToken} userId={user.id} transactions={transactions} banks={activeBanks} forecasts={forecasts} categories={categories} onRefresh={fetchInitialData} />;
     }
   };
 
