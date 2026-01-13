@@ -42,7 +42,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
           }
           else if (tab === 'users') {
               const res = await fetch('/api/admin/users', { headers: getHeaders() });
-              if(res.ok) setUsers(await res.json());
+              if(res.ok) {
+                  const data = await res.json();
+                  if (Array.isArray(data)) setUsers(data);
+              } else {
+                  console.error("Erro ao buscar usuários");
+                  setUsers([]);
+              }
           }
           else if (tab === 'audit') {
               const res = await fetch('/api/admin/audit-transactions', { headers: getHeaders() });

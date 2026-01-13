@@ -15,7 +15,7 @@ import { rateLimit } from 'express-rate-limit';
 // --- CONFIGURAÇÃO DE SEGURANÇA E AMBIENTE ---
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
 
-// Credenciais de Admin (Suporte a MAIL_ADMIN e EMAIL_ADMIN)
+// Credenciais de Admin
 const ADMIN_EMAIL = (process.env.MAIL_ADMIN || process.env.EMAIL_ADMIN || '').trim();
 const ADMIN_PASSWORD = (process.env.PASSWORD_ADMIN || '').trim();
 
@@ -179,7 +179,7 @@ const INITIAL_BANKS_SEED = [
   { name: 'Caixa Registradora', logo: '/logo/caixaf.png' },
 ];
 
-// LISTA DE CATEGORIAS LIMPA (SEM DUPLICATAS) - ATUALIZADA
+// LISTA DE CATEGORIAS LIMPA - COM NOVOS GRUPOS CONTÁBEIS
 const INITIAL_CATEGORIES_SEED = [
   // RECEITAS OPERACIONAIS
   { name: 'Vendas de Mercadorias', type: 'receita', group: 'receita_bruta' },
@@ -252,7 +252,7 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS keyword_rules (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, keyword TEXT, type TEXT, category_id INTEGER, bank_id INTEGER, FOREIGN KEY(user_id) REFERENCES users(id))`);
   db.run(`CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, action TEXT, details TEXT, ip_address TEXT, created_at TEXT)`);
   
-  // Seed Bancos Globais - CRÍTICO PARA FUNCIONAR O CADASTRO
+  // Seed Bancos Globais
   db.get("SELECT COUNT(*) as count FROM global_banks", [], (err, row) => {
       if (!err && row && row.count === 0) {
           const stmt = db.prepare("INSERT INTO global_banks (name, logo) VALUES (?, ?)");
@@ -274,7 +274,7 @@ app.post('/api/login', (req, res) => {
     const inputEmail = (email || '').trim();
     const inputPass = (password || '').trim();
 
-    // 1. Login ADMIN via ENV (Checa ambas as vars)
+    // 1. Login ADMIN via ENV
     if (ADMIN_EMAIL && ADMIN_PASSWORD && inputEmail === ADMIN_EMAIL && inputPass === ADMIN_PASSWORD) {
         const token = jwt.sign({ id: 0, email: inputEmail, role: 'admin' }, JWT_SECRET, { expiresIn: '12h' });
         logAudit('0', 'LOGIN_ADMIN', 'Acesso Admin', req.ip);
@@ -326,9 +326,6 @@ app.post('/api/request-signup', (req, res) => {
                         <a href="${link}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
                             Definir Minha Senha
                         </a>
-                        <p style="color: #94a3b8; font-size: 12px; margin-top: 30px;">
-                            Link válido por 24 horas.
-                        </p>
                     </div>
                 </div>
                 `;
@@ -347,7 +344,6 @@ app.get('/api/validate-signup-token/:token', (req, res) => {
     });
 });
 
-// ROTA CRÍTICA: CADASTRO COMPLETO (SEM SEED DE BANCOS)
 app.post('/api/complete-signup', (req, res) => {
     const { token, password } = req.body;
     db.get("SELECT * FROM pending_signups WHERE token = ?", [token], (err, pending) => {
@@ -360,12 +356,10 @@ app.post('/api/complete-signup', (req, res) => {
                 if (err) return res.status(500).json({ error: err.message });
                 const userId = this.lastID;
                 
-                // 1. Seed Categories (Lista Limpa)
+                // Seed Categories (Lista Atualizada)
                 const stmtCat = db.prepare("INSERT INTO categories (user_id, name, type, group_type) VALUES (?, ?, ?, ?)");
                 INITIAL_CATEGORIES_SEED.forEach(c => stmtCat.run(userId, c.name, c.type, c.group));
                 stmtCat.finalize();
-
-                // 2. Bancos: NÃO INSERE NADA AUTOMATICAMENTE. O USUÁRIO CADASTRA DEPOIS.
 
                 db.run("DELETE FROM pending_signups WHERE email = ?", [pending.email]);
                 logAudit(userId, 'SIGNUP', 'Completo', req.ip);
@@ -381,20 +375,8 @@ app.post('/api/recover-password', (req, res) => {
     db.run("UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?", [token, Date.now()+3600000, email], function(err) {
         if(this.changes > 0) {
             const link = `${req.protocol}://${req.get('host')}/?action=reset&token=${token}`;
-            const html = `
-            <div style="font-family: 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8fafc; padding: 20px; border-radius: 8px;">
-            <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; border: 1px solid #e2e8f0; text-align: center;">
-                <h1 style="color: #10b981; margin: 0 0 20px 0;">Recuperação de Senha</h1>
-                <p style="color: #334155; font-size: 16px; margin-bottom: 30px;">
-                    Recebemos uma solicitação para redefinir a senha.
-                </p>
-                <a href="${link}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-                    Redefinir Minha Senha
-                </a>
-            </div>
-            </div>
-            `;
-            sendEmail(email, "Recuperação de Senha - Virgula Contábil", html);
+            const html = `<a href="${link}">Redefinir Senha</a>`;
+            sendEmail(email, "Recuperação de Senha", html);
         }
         res.json({ message: "Enviado se existir." });
     });
@@ -410,7 +392,7 @@ app.post('/api/reset-password-confirm', (req, res) => {
 
 // --- ROTAS GERAIS (PROTEGIDAS) ---
 
-// Bancos (CRUD de Usuário)
+// Bancos
 app.get('/api/banks', authenticateToken, (req, res) => {
     db.all('SELECT * FROM banks WHERE user_id = ? ORDER BY active DESC, name', [req.userId], (err, rows) => res.json(rows));
 });
@@ -439,7 +421,6 @@ app.delete('/api/banks/:id', authenticateToken, (req, res) => {
 app.get('/api/categories', authenticateToken, (req, res) => {
     db.all(`SELECT * FROM categories WHERE user_id = ? ORDER BY name`, [req.userId], (err, rows) => {
         if(rows && rows.length === 0) {
-            // Auto-repair seed if empty
             const stmt = db.prepare("INSERT INTO categories (user_id, name, type, group_type) VALUES (?, ?, ?, ?)");
             INITIAL_CATEGORIES_SEED.forEach(c => stmt.run(req.userId, c.name, c.type, c.group));
             stmt.finalize(() => {
@@ -579,7 +560,7 @@ app.delete('/api/keyword-rules/:id', authenticateToken, (req, res) => {
     db.run(`DELETE FROM keyword_rules WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err) => res.json({success: !err}));
 });
 
-// --- RELATÓRIOS (RESTAURADOS) ---
+// --- RELATÓRIOS (RESTAURADOS E CORRIGIDOS PARA NOVA DRE) ---
 
 app.get('/api/reports/cash-flow', authenticateToken, async (req, res) => {
     const { year, month } = req.query;
@@ -652,6 +633,7 @@ app.get('/api/reports/daily-flow', authenticateToken, (req, res) => {
     );
 });
 
+// DRE CORRIGIDO COM LÓGICA CONTÁBIL
 app.get('/api/reports/dre', authenticateToken, (req, res) => {
     const { year, month } = req.query;
     const userId = req.userId;
@@ -667,14 +649,14 @@ app.get('/api/reports/dre', authenticateToken, (req, res) => {
 
         let dre = { 
             receitaBruta: 0, 
-            deducoes: 0, // Impostos
+            deducoes: 0, 
             cmv: 0, // Custo Operacional
             outrasReceitas: 0,
             despesasOperacionais: 0, 
             resultadoFinanceiro: 0, 
             receitaNaoOperacional: 0, 
             despesaNaoOperacional: 0, 
-            impostos: 0 // Mantido para referência, mas usado em deducoes
+            impostos: 0 // Mantido para referencia
         };
 
         rows.forEach(t => {
@@ -682,7 +664,7 @@ app.get('/api/reports/dre', authenticateToken, (req, res) => {
             const val = t.value;
             const isCredit = t.type === 'credito';
 
-            // Agrupamento baseado no DRE Novo
+            // Agrupamento
             if (group === 'receita_bruta') dre.receitaBruta += val;
             else if (group === 'impostos') { 
                 if(!isCredit) {
@@ -697,26 +679,21 @@ app.get('/api/reports/dre', authenticateToken, (req, res) => {
             else if (group === 'receita_nao_operacional') dre.receitaNaoOperacional += val;
             else if (group === 'despesa_nao_operacional') dre.despesaNaoOperacional += val;
             else if (['despesa_operacional', 'despesa_pessoal', 'despesa_administrativa'].includes(group)) dre.despesasOperacionais += val;
-            else if (group === 'nao_operacional') { /* Ignorar transferências internas */ }
+            // Fallback
+            else if (group === 'nao_operacional') { /* Ignora */ }
             else { 
-                // Fallback por texto se não tiver grupo
                 const cat = (t.category_name || '').toLowerCase();
                 if (!isCredit) dre.despesasOperacionais += val; 
                 else if(cat.includes('venda') || cat.includes('serviço')) dre.receitaBruta += val;
+                else dre.outrasReceitas += val;
             }
         });
 
-        // Cálculo Final Correto
         const receitaLiquida = dre.receitaBruta - dre.deducoes;
         const resultadoBruto = receitaLiquida - dre.cmv;
         const resultadoOperacional = resultadoBruto - dre.despesasOperacionais;
-        
-        // Resultado Antes do Não Operacional (inclui financeiro e outras receitas)
         const resultadoAntesNaoOperacional = resultadoOperacional + dre.resultadoFinanceiro + dre.outrasReceitas;
-        
         const resultadoNaoOperacionalTotal = dre.receitaNaoOperacional - dre.despesaNaoOperacional;
-        
-        // Lucro Líquido
         const lucroLiquido = resultadoAntesNaoOperacional + resultadoNaoOperacionalTotal;
 
         res.json({
@@ -737,7 +714,6 @@ app.get('/api/reports/dre', authenticateToken, (req, res) => {
 });
 
 app.get('/api/reports/analysis', authenticateToken, (req, res) => {
-    // Reusing logic similar to DRE but for KPI calculation
     const { year, month } = req.query;
     const userId = req.userId;
     const y = parseInt(year);
@@ -773,8 +749,7 @@ app.get('/api/reports/analysis', authenticateToken, (req, res) => {
             }
         });
 
-        // KPIs Básicos Corrigidos
-        const receitaLiquida = dre.receitaBruta - dre.impostos; // Receita Líquida Correta
+        const receitaLiquida = dre.receitaBruta - dre.impostos;
         
         const margemContribuicaoVal = receitaLiquida - dre.cmv;
         const margemContribuicaoPct = receitaLiquida > 0 ? (margemContribuicaoVal / receitaLiquida) * 100 : 0;
@@ -819,10 +794,12 @@ app.get('/api/reports/forecasts', authenticateToken, (req, res) => {
     });
 });
 
-// Admin Routes
+// Admin Routes (CORREÇÃO DE CRASH)
 app.get('/api/admin/users', authenticateToken, checkAdmin, (req, res) => {
     db.all("SELECT id, email, cnpj, razao_social, phone, created_at FROM users", [], (err, rows) => {
-        res.json(rows.map(r => ({ ...r, cnpj: decrypt(r.cnpj), razao_social: decrypt(r.razao_social), phone: decrypt(r.phone) })));
+        if (err) return res.status(500).json({ error: err.message });
+        const safeRows = rows || [];
+        res.json(safeRows.map(r => ({ ...r, cnpj: decrypt(r.cnpj), razao_social: decrypt(r.razao_social), phone: decrypt(r.phone) })));
     });
 });
 app.get('/api/admin/global-data', authenticateToken, checkAdmin, (req, res) => {
