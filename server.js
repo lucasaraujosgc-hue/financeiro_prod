@@ -247,6 +247,11 @@ db.serialize(() => {
   });
 });
 
+// --- ROTAS PÚBLICAS ---
+app.get('/api/global-banks', (req, res) => {
+    db.all('SELECT * FROM global_banks ORDER BY name', [], (err, rows) => res.json(rows || []));
+});
+
 // --- ROTAS DE AUTENTICAÇÃO ---
 
 app.post('/api/login', (req, res) => {
@@ -390,11 +395,7 @@ app.post('/api/reset-password-confirm', (req, res) => {
 
 // --- ROTAS GERAIS (PROTEGIDAS) ---
 
-app.get('/api/global-banks', authenticateToken, (req, res) => {
-    db.all('SELECT * FROM global_banks ORDER BY name', [], (err, rows) => res.json(rows || []));
-});
-
-// Bancos
+// Bancos (CRUD de Usuário)
 app.get('/api/banks', authenticateToken, (req, res) => {
     db.all('SELECT * FROM banks WHERE user_id = ? ORDER BY active DESC, name', [req.userId], (err, rows) => res.json(rows));
 });

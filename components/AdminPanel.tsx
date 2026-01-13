@@ -32,36 +32,42 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
       };
   };
 
-  // Carregamento unificado para evitar race conditions
-  useEffect(() => {
-      const fetchData = async () => {
-          setLoading(true);
-          try {
-              if (activeTab === 'dashboard') {
-                  const res = await fetch('/api/admin/global-data', { headers: getHeaders() });
-                  if(res.ok) setStats(await res.json());
-              }
-              else if (activeTab === 'users') {
-                  const res = await fetch('/api/admin/users', { headers: getHeaders() });
-                  if(res.ok) setUsers(await res.json());
-              }
-              else if (activeTab === 'audit') {
-                  const res = await fetch('/api/admin/audit-transactions', { headers: getHeaders() });
-                  if(res.ok) setAuditData(await res.json());
-              }
-              else if (activeTab === 'banks') {
-                  const res = await fetch('/api/admin/banks', { headers: getHeaders() });
-                  if(res.ok) setAdminBanks(await res.json());
-              }
-          } catch (e) {
-              console.error("Erro ao carregar dados:", e);
-          } finally {
-              setLoading(false);
+  // Carregar dados com base na tab ativa, evitando concorrência direta no useEffect
+  const loadTabContent = async (tab: string) => {
+      setLoading(true);
+      try {
+          if (tab === 'dashboard') {
+              const res = await fetch('/api/admin/global-data', { headers: getHeaders() });
+              if(res.ok) setStats(await res.json());
           }
-      };
+          else if (tab === 'users') {
+              const res = await fetch('/api/admin/users', { headers: getHeaders() });
+              if(res.ok) setUsers(await res.json());
+          }
+          else if (tab === 'audit') {
+              const res = await fetch('/api/admin/audit-transactions', { headers: getHeaders() });
+              if(res.ok) setAuditData(await res.json());
+          }
+          else if (tab === 'banks') {
+              const res = await fetch('/api/admin/banks', { headers: getHeaders() });
+              if(res.ok) setAdminBanks(await res.json());
+          }
+      } catch (e) {
+          console.error("Erro ao carregar dados:", e);
+      } finally {
+          setLoading(false);
+      }
+  };
 
-      if (token) fetchData();
+  // Carrega ao montar e ao trocar de tab explicitamente
+  useEffect(() => {
+      if (token) loadTabContent(activeTab);
   }, [activeTab, token]);
+
+  const handleTabChange = (tab: 'dashboard' | 'users' | 'audit' | 'banks') => {
+      setActiveTab(tab);
+      // O useEffect cuidará do carregamento
+  };
 
   const handleOpenUser = async (user: any) => {
       setSelectedUser(user); 
@@ -73,6 +79,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
       try { 
           const res = await fetch(`/api/admin/users/${user.id}/full-data`, { headers: getHeaders() }); 
           if (res.ok) setUserDetails(await res.json()); 
+          else alert("Erro ao carregar detalhes do usuário");
+      } catch (e) {
+          console.error(e);
+          alert("Erro de conexão");
       } finally { 
           setLoading(false); 
       }
@@ -80,13 +90,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
 
   const handleDeleteUser = async (id: number, email: string) => {
       if (confirm(`ATENÇÃO: Isso excluirá permanentemente a empresa ${email} e TODOS os seus dados. Confirmar?`)) {
-          const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE', headers: getHeaders() });
-          if (res.ok) { 
-              alert("Usuário removido."); 
-              // Refresh user list
-              const refresh = await fetch('/api/admin/users', { headers: getHeaders() });
-              if(refresh.ok) setUsers(await refresh.json());
-              setSelectedUser(null); 
+          try {
+              const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE', headers: getHeaders() });
+              if (res.ok) { 
+                  alert("Usuário removido."); 
+                  loadTabContent('users'); // Recarrega a lista
+                  setSelectedUser(null); 
+              } else {
+                  alert("Erro ao remover usuário");
+              }
+          } catch (e) {
+              alert("Erro de conexão");
           }
       }
   };
@@ -116,9 +130,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
           
           if (res.ok) { 
               handleCancelEdit(); 
-              // Force refresh banks list
-              const refresh = await fetch('/api/admin/banks', { headers: getHeaders() });
-              if(refresh.ok) setAdminBanks(await refresh.json());
+              loadTabContent('banks');
               alert(editingBankId ? "Atualizado!" : "Criado!"); 
           } else {
               alert("Erro ao salvar.");
@@ -142,21 +154,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
   const handleDeleteBank = async (id: number) => { 
       if(confirm("Excluir este banco global?")) { 
           await fetch(`/api/admin/banks/${id}`, { method: 'DELETE', headers: getHeaders() }); 
-          // Force refresh
-          const refresh = await fetch('/api/admin/banks', { headers: getHeaders() });
-          if(refresh.ok) setAdminBanks(await refresh.json());
+          loadTabContent('banks');
       } 
-  };
-
-  const handleDownloadOFX = (importId: number, fileName: string) => {
-      fetch(`/api/admin/ofx-download/${importId}`, { headers: getHeaders() })
-        .then(res => res.blob())
-        .then(blob => { 
-            const url = window.URL.createObjectURL(blob); 
-            const a = document.createElement('a'); 
-            a.href = url; a.download = fileName; 
-            document.body.appendChild(a); a.click(); a.remove(); 
-        });
   };
 
   const filterByDate = (items: any[]) => items?.filter(item => { 
@@ -172,16 +171,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
               <h1 className="font-bold text-lg text-white">Admin Master</h1>
           </div>
           <nav className="flex-1 p-4 space-y-2">
-              <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'dashboard' ? 'bg-red-500/10 text-red-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+              <button onClick={() => handleTabChange('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'dashboard' ? 'bg-red-500/10 text-red-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
                   <LayoutDashboard size={20}/> Dashboard
               </button>
-              <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'users' ? 'bg-red-500/10 text-red-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+              <button onClick={() => handleTabChange('users')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'users' ? 'bg-red-500/10 text-red-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
                   <Users size={20}/> Usuários
               </button>
-              <button onClick={() => setActiveTab('banks')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'banks' ? 'bg-red-500/10 text-red-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+              <button onClick={() => handleTabChange('banks')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'banks' ? 'bg-red-500/10 text-red-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
                   <Landmark size={20}/> Bancos Globais
               </button>
-              <button onClick={() => setActiveTab('audit')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'audit' ? 'bg-red-500/10 text-red-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+              <button onClick={() => handleTabChange('audit')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${activeTab === 'audit' ? 'bg-red-500/10 text-red-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
                   <FileText size={20}/> Auditoria
               </button>
           </nav>
@@ -193,6 +192,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
       </aside>
 
       <main className="flex-1 overflow-auto bg-black p-8 relative">
+          {loading && (
+              <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500"></div>
+              </div>
+          )}
+
           {activeTab === 'dashboard' && stats && (
               <div className="space-y-6 animate-in fade-in">
                   <h2 className="text-2xl font-bold text-white mb-6">Visão Geral</h2>
@@ -228,7 +233,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
                           </thead>
                           <tbody className="divide-y divide-slate-800">
                               {users.length === 0 ? (
-                                  <tr><td colSpan={4} className="px-6 py-8 text-center text-slate-500">Nenhum usuário.</td></tr>
+                                  <tr><td colSpan={4} className="px-6 py-8 text-center text-slate-500">Nenhum usuário cadastrado.</td></tr>
                               ) : (
                                   users.map(u => (
                                       <tr key={u.id} className="hover:bg-slate-800/50">
@@ -236,8 +241,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
                                           <td className="px-6 py-4 text-slate-300">{u.email}</td>
                                           <td className="px-6 py-4 text-slate-400 font-mono text-xs">{u.cnpj}</td>
                                           <td className="px-6 py-4 text-center flex items-center justify-center gap-2">
-                                              <button onClick={() => handleOpenUser(u)} className="p-2 bg-blue-500/10 text-blue-500 rounded"><Eye size={18}/></button> 
-                                              <button onClick={() => handleDeleteUser(u.id, u.email)} className="p-2 bg-red-500/10 text-red-500 rounded"><Trash2 size={18}/></button>
+                                              <button onClick={() => handleOpenUser(u)} className="p-2 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20" title="Ver Detalhes"><Eye size={18}/></button> 
+                                              <button onClick={() => handleDeleteUser(u.id, u.email)} className="p-2 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20" title="Excluir Usuário"><Trash2 size={18}/></button>
                                           </td>
                                       </tr>
                                   ))
