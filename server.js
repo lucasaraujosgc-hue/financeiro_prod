@@ -244,7 +244,7 @@ const INITIAL_BANKS_SEED = [
   { name: 'Caixa Registradora', logo: '/logo/caixaf.png' },
 ];
 
-// CATEGORIAS SEED - ALINHADAS COM O CÓDIGO DRE FORNECIDO
+// CATEGORIAS SEED - LISTA LIMPA E ÚNICA
 const INITIAL_CATEGORIES_SEED = [
     // RECEITAS
     { name: 'Vendas de Mercadorias', type: 'receita', group: 'receita_bruta' },
@@ -254,30 +254,29 @@ const INITIAL_CATEGORIES_SEED = [
     { name: 'Receita Financeira (juros, rendimentos)', type: 'receita', group: 'receita_financeira' },
     { name: 'Devoluções de Despesas', type: 'receita', group: 'receita_financeira' },
     { name: 'Reembolsos de Clientes', type: 'receita', group: 'outras_receitas' },
-    { name: 'Transferências Internas', type: 'receita', group: 'nao_operacional' },
     { name: 'Aportes de Sócios / Investimentos', type: 'receita', group: 'nao_operacional' },
     { name: 'Outras Receitas Operacionais', type: 'receita', group: 'outras_receitas' },
     { name: 'Receitas Não Operacionais (venda de ativo)', type: 'receita', group: 'receita_nao_operacional' },
+    
     // DESPESAS
     { name: 'Compra de Mercadorias / Matéria-Prima', type: 'despesa', group: 'cmv' },
     { name: 'Fretes e Transportes', type: 'despesa', group: 'cmv' },
     { name: 'Custos Diretos', type: 'despesa', group: 'cmv' },
-    { name: 'Despesas com Pessoal', type: 'despesa', group: 'despesa_pessoal' },
-    { name: 'Serviços de Terceiros', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Despesas Administrativas', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Despesas Comerciais', type: 'despesa', group: 'despesa_operacional' },
+    { name: 'Despesas com Pessoal (salários, pró-labore)', type: 'despesa', group: 'despesa_pessoal' },
+    { name: 'Serviços de Terceiros (contabilidade, marketing)', type: 'despesa', group: 'despesa_operacional' },
+    { name: 'Despesas Administrativas (papelaria, escritório)', type: 'despesa', group: 'despesa_administrativa' },
+    { name: 'Despesas Comerciais (comissões, propaganda)', type: 'despesa', group: 'despesa_operacional' },
     { name: 'Energia Elétrica / Água / Telefone / Internet', type: 'despesa', group: 'despesa_administrativa' },
     { name: 'Aluguel e Condomínio', type: 'despesa', group: 'despesa_administrativa' },
     { name: 'Manutenção e Limpeza', type: 'despesa', group: 'despesa_administrativa' },
     { name: 'Combustível e Deslocamento', type: 'despesa', group: 'despesa_operacional' },
     { name: 'Seguros', type: 'despesa', group: 'despesa_administrativa' },
-    { name: 'Tarifas Bancárias e Juros', type: 'despesa', group: 'despesa_financeira' },
     { name: 'Impostos e Taxas (ISS, ICMS, DAS)', type: 'despesa', group: 'impostos' },
-    { name: 'Despesas Financeiras', type: 'despesa', group: 'despesa_financeira' },
-    { name: 'Transferências Internas', type: 'despesa', group: 'nao_operacional' },
+    { name: 'Despesas Financeiras (juros, multas)', type: 'despesa', group: 'despesa_financeira' },
+    { name: 'Transferências Internas (entre contas)', type: 'despesa', group: 'nao_operacional' }, // Também serve como Receita na outra ponta
     { name: 'Distribuição de Lucros / Retirada', type: 'despesa', group: 'nao_operacional' },
     { name: 'Outras Despesas Operacionais', type: 'despesa', group: 'despesa_operacional' },
-    { name: 'Despesas Não Operacionais', type: 'despesa', group: 'despesa_nao_operacional' }
+    { name: 'Despesas Não Operacionais (baixas contábeis)', type: 'despesa', group: 'despesa_nao_operacional' }
 ];
 
 const ensureColumn = (table, column, definition) => {

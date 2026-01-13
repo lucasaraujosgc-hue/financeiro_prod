@@ -192,8 +192,8 @@ const Forecasts: React.FC<ForecastsProps> = ({ token, userId, banks, categories,
                });
 
                await fetchForecasts();
-               onUpdate(); // Trigger global update
-               onNavigate('transactions'); // Redireciona para a aba de lançamentos
+               await onUpdate(); // Wait for global update to complete
+               onNavigate('transactions'); // Redirect to transactions tab
            } catch (e) {
                alert("Erro ao efetivar");
            }

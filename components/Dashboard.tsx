@@ -72,15 +72,14 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
       return fDateMidnight < startOfSelectedMonth && !f.realized;
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  // Lógica de cálculo corrigida
+  // Lógica de cálculo ATUALIZADA
+  // Saldo Atual: Já vem pronto do backend ou calculado no App.tsx com base em transações
+  // Saldo Projetado: Saldo Atual + Soma das Previsões Pendentes (Futuras)
   const calculateProjectedBalance = (bank: Bank) => {
-      // 1. Saldo Atual (Já inclui todos os lançamentos: pendentes e conciliados, pois foi calculado no App.tsx)
       let projected = bank.balance;
 
-      // 2. Adicionar Previsões Futuras (Forecasts não realizados)
-      // Considerando todas as previsões futuras cadastradas
-      const bankForecasts = forecasts.filter(f => f.bankId === bank.id && !f.realized);
-      bankForecasts.forEach(f => {
+      const bankPendingForecasts = forecasts.filter(f => f.bankId === bank.id && !f.realized);
+      bankPendingForecasts.forEach(f => {
           const val = Math.abs(f.value);
           const isCredit = f.type === TransactionType.CREDIT;
           projected += isCredit ? val : -val;
@@ -122,12 +121,10 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
   const topIncomeCategories = getTopCategories(TransactionType.CREDIT);
   const topExpenseCategories = getTopCategories(TransactionType.DEBIT);
 
-  // Alterado: Remove o filtro de conciliado para considerar tudo
   const allTimeIncome = transactions.filter(t => t.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
   const allTimeExpense = transactions.filter(t => t.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
   const totalBalance = allTimeIncome - allTimeExpense;
 
-  // No Mês
   const monthRealizedIncome = currentMonthTransactions.filter(t => t.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
   const monthRealizedExpense = currentMonthTransactions.filter(t => t.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
 
@@ -177,7 +174,6 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
         await fetch(`/api/forecasts/${forecast.id}/realize`, { method: 'PATCH', headers: getHeaders() });
         const descSuffix = forecast.installmentTotal ? ` (${forecast.installmentCurrent}/${forecast.installmentTotal})` : (forecast.groupId ? ' (Recorrente)' : '');
         
-        // Manual Creation of Transaction
         await fetch('/api/transactions', {
             method: 'POST',
             headers: getHeaders(),
@@ -222,34 +218,58 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
       const installments = formData.isFixed ? 60 : Math.max(1, Math.floor(Number(formData.installments)));
 
       try {
-          for (let i = 0; i < installments; i++) {
-              const currentDate = new Date(baseDate);
-              currentDate.setMonth(baseDate.getMonth() + i);
-              const dateStr = currentDate.toISOString().split('T')[0];
-              const isRecurrent = installments > 1 || formData.isFixed;
-              const currentInstallment = i + 1;
-              
-              if (target === 'transaction' && i === 0) {
-                  const descSuffix = isRecurrent ? (formData.isFixed ? ' (Fixo)' : ` (${currentInstallment}/${installments})`) : '';
-                  await fetch('/api/transactions', {
-                       method: 'POST', headers: getHeaders(),
-                       body: JSON.stringify({
-                           date: dateStr, description: formData.description + descSuffix, value: value, type: formData.type,
-                           categoryId: Number(formData.categoryId), bankId: Number(formData.bankId), reconciled: false
-                       })
-                   });
-              } else {
+          // If explicitly chosen as forecast OR if there are multiple installments, logic:
+          if (target === 'forecast') {
+              // SAVE ALL AS FORECAST
+              for (let i = 0; i < installments; i++) {
+                  const currentDate = new Date(baseDate);
+                  currentDate.setMonth(baseDate.getMonth() + i);
+                  const dateStr = currentDate.toISOString().split('T')[0];
+                  const isRecurrent = installments > 1 || formData.isFixed;
+                  
                   await fetch('/api/forecasts', {
                       method: 'POST', headers: getHeaders(),
                       body: JSON.stringify({
                           date: dateStr, description: formData.description, value: value, type: formData.type,
                           categoryId: Number(formData.categoryId), bankId: Number(formData.bankId),
-                          installmentCurrent: currentInstallment, installmentTotal: formData.isFixed ? 0 : installments,
+                          installmentCurrent: i + 1, installmentTotal: formData.isFixed ? 0 : installments,
                           groupId: isRecurrent ? groupId : null, realized: false
                       })
                   });
               }
+          } else {
+              // SAVE AS TRANSACTION (1st is Transaction, Rest are Forecasts)
+              for (let i = 0; i < installments; i++) {
+                  const currentDate = new Date(baseDate);
+                  currentDate.setMonth(baseDate.getMonth() + i);
+                  const dateStr = currentDate.toISOString().split('T')[0];
+                  const isRecurrent = installments > 1 || formData.isFixed;
+                  
+                  if (i === 0) {
+                      // First one goes to Transactions
+                      const descSuffix = isRecurrent ? (formData.isFixed ? ' (Fixo)' : ` (1/${installments})`) : '';
+                      await fetch('/api/transactions', {
+                           method: 'POST', headers: getHeaders(),
+                           body: JSON.stringify({
+                               date: dateStr, description: formData.description + descSuffix, value: value, type: formData.type,
+                               categoryId: Number(formData.categoryId), bankId: Number(formData.bankId), reconciled: false
+                           })
+                       });
+                  } else {
+                      // Rest go to Forecasts
+                      await fetch('/api/forecasts', {
+                          method: 'POST', headers: getHeaders(),
+                          body: JSON.stringify({
+                              date: dateStr, description: formData.description, value: value, type: formData.type,
+                              categoryId: Number(formData.categoryId), bankId: Number(formData.bankId),
+                              installmentCurrent: i + 1, installmentTotal: formData.isFixed ? 0 : installments,
+                              groupId: isRecurrent ? groupId : null, realized: false
+                          })
+                      });
+                  }
+              }
           }
+          
           setIsModalOpen(false);
           await onRefresh();
       } catch (error) { alert("Erro ao salvar"); }
@@ -510,13 +530,14 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="relative bg-surface border border-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="px-6 py-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
-              <h3 className="font-semibold text-white">
+          <div className="relative bg-surface border border-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 text-slate-200">
+            <div className={`px-6 py-4 border-b border-slate-800 flex justify-between items-center ${formData.type === TransactionType.CREDIT ? 'bg-emerald-950/30' : 'bg-rose-950/30'}`}>
+              <h3 className={`font-bold ${formData.type === TransactionType.CREDIT ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {formData.type === TransactionType.CREDIT ? 'Nova Receita' : 'Nova Despesa'}
               </h3>
-              <button onClick={() => setIsModalOpen(false)}><X size={20} className="text-slate-400 hover:text-white"/></button>
+              <button onClick={() => setIsModalOpen(false)}><X size={20} className="text-slate-400 hover:text-slate-200"/></button>
             </div>
+            
             <div className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                      <div>
@@ -532,7 +553,7 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
                          <label className="text-sm text-slate-400 font-medium">Valor</label>
                          <input 
                             type="number" step="0.01" required
-                            className={`w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 font-bold outline-none focus:border-primary ${formData.type === TransactionType.DEBIT ? 'text-rose-500' : 'text-emerald-500'}`}
+                            className={`w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 font-bold outline-none focus:border-primary ${formData.type === TransactionType.CREDIT ? 'text-emerald-500' : 'text-rose-500'}`}
                             value={formData.value}
                             onChange={e => setFormData({...formData, value: e.target.value})}
                          />
@@ -571,88 +592,50 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
                          </select>
                      </div>
                 </div>
-                
-                {/* Options for Forecast/Transaction */}
-                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 flex gap-2">
-                    <button 
-                        onClick={() => handleQuickSave('transaction')} 
-                        className="flex-1 py-2 bg-primary text-slate-900 rounded-lg hover:bg-primaryHover font-medium text-sm flex justify-center items-center gap-1"
-                    >
-                        <CheckCircle2 size={16}/> Salvar Lançamento
+
+                <div className="bg-slate-900 p-3 rounded-lg border border-slate-800">
+                    <label className="text-xs font-semibold text-slate-500 mb-2 block flex items-center gap-2">
+                        <Repeat size={12}/> RECORRÊNCIA (OPCIONAL)
+                    </label>
+                    <div className="flex items-center gap-4 mb-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input 
+                                type="checkbox"
+                                checked={formData.isFixed}
+                                onChange={e => setFormData({...formData, isFixed: e.target.checked})}
+                                className="w-4 h-4 text-primary rounded border-slate-700 bg-slate-800"
+                            />
+                            <span className="text-sm text-slate-300">Fixo Mensal</span>
+                        </label>
+                    </div>
+                    {!formData.isFixed && (
+                            <div className="flex items-center gap-2">
+                            <CalendarDays className="text-slate-500" size={16}/>
+                            <input 
+                                type="number" min="1" max="360"
+                                className="w-16 bg-slate-950 border border-slate-700 rounded p-1 text-center text-sm text-white"
+                                value={formData.installments}
+                                onChange={e => setFormData({...formData, installments: Number(e.target.value)})}
+                            />
+                            <span className="text-sm text-slate-400">parcelas</span>
+                        </div>
+                    )}
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                    <button type="button" onClick={() => handleQuickSave('forecast')} className="flex-1 flex flex-col items-center justify-center gap-1 py-3 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400 transition-colors">
+                        <ThumbsDown size={20} className="text-slate-500" />
+                        <span className="text-xs font-semibold">Previsão (Futuro)</span>
                     </button>
-                    <button 
-                        onClick={() => handleQuickSave('forecast')} 
-                        className="flex-1 py-2 bg-slate-800 text-slate-300 border border-slate-700 rounded-lg hover:bg-slate-700 font-medium text-sm flex justify-center items-center gap-1"
-                    >
-                        <CalendarClock size={16}/> Salvar como Previsão
+                    <button type="button" onClick={() => handleQuickSave('transaction')} className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-slate-900 rounded-lg shadow-sm transition-colors ${formData.type === TransactionType.CREDIT ? 'bg-primary hover:bg-primaryHover' : 'bg-rose-600 hover:bg-rose-700'}`}>
+                        <ThumbsUp size={20} />
+                        <span className="text-xs font-semibold">{formData.installments > 1 || formData.isFixed ? 'Lançar 1ª + Previsões' : 'Lançamento (Hoje)'}</span>
                     </button>
                 </div>
             </div>
           </div>
         </div>
-      )}
-
-      {/* Realize Forecast Modal */}
-      {isOverdueModalOpen && overdueForecasts.length > 0 && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-              <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl max-h-[80vh] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col">
-                  <div className="p-6 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
-                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                          <AlertTriangle className="text-amber-500" size={20}/> Resolver Pendências
-                      </h3>
-                      <button onClick={() => setIsOverdueModalOpen(false)}><X size={20} className="text-slate-400 hover:text-white"/></button>
-                  </div>
-                  <div className="flex-1 overflow-auto p-4 custom-scroll space-y-2">
-                      {overdueForecasts.map(f => (
-                          <div key={f.id} className="flex items-center justify-between p-3 bg-slate-800/50 border border-slate-700 rounded-lg">
-                              <div>
-                                  <div className="flex items-center gap-2">
-                                      <span className="text-xs font-mono text-slate-400">{new Date(f.date).toLocaleDateString()}</span>
-                                      <span className="font-bold text-slate-200">{f.description}</span>
-                                  </div>
-                                  <div className="text-xs text-slate-500 mt-1">
-                                      {banks.find(b => b.id === f.bankId)?.name} • R$ {f.value.toFixed(2)}
-                                  </div>
-                              </div>
-                              <div className="flex gap-2">
-                                  <button onClick={() => openRealizeModal(f)} className="p-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-lg" title="Efetivar">
-                                      <Check size={16}/>
-                                  </button>
-                                  <button onClick={() => handleDeleteForecast(f.id)} className="p-2 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 rounded-lg" title="Excluir">
-                                      <Trash2 size={16}/>
-                                  </button>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Confirmation Modal for Realize */}
-      {realizeModal.isOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-              <div className="bg-surface border border-slate-700 w-full max-w-sm rounded-xl p-6 animate-in fade-in zoom-in duration-200">
-                  <h3 className="text-lg font-bold text-white mb-4">Confirmar Realização</h3>
-                  <div className="space-y-3 mb-6">
-                      <label className="block text-sm text-slate-400">Data da Efetivação</label>
-                      <input 
-                          type="date" 
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-primary"
-                          value={realizeModal.date}
-                          onChange={(e) => setRealizeModal(prev => ({ ...prev, date: e.target.value }))}
-                      />
-                      <p className="text-xs text-slate-500">
-                          Isso criará um lançamento financeiro oficial e atualizará o saldo da conta.
-                      </p>
-                  </div>
-                  <div className="flex gap-3">
-                      <button onClick={() => setRealizeModal({ isOpen: false, forecast: null, date: '' })} className="flex-1 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800">Cancelar</button>
-                      <button onClick={confirmRealization} className="flex-1 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-500">Confirmar</button>
-                  </div>
-              </div>
-          </div>
-      )}
+       )}
     </div>
   );
 };
