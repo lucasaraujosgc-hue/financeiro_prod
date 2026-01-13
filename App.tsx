@@ -108,9 +108,12 @@ function App() {
               fetchForecasts(),
               fetchKeywordRules()
           ]);
-      } catch (e) {
+      } catch (e: any) {
           console.error("Erro ao carregar dados", e);
-          setIsAppError(true);
+          // Evita travar a tela se for apenas erro de login (o handleLogout já resolveu)
+          if (e.message !== "Sessão expirada") {
+              setIsAppError(true);
+          }
       }
   };
 
@@ -183,6 +186,7 @@ function App() {
 
   const handleLogout = () => {
       setIsAuthenticated(false);
+      setIsAppError(false); // Limpa erro ao sair
       setUser(null);
       setToken(null);
       localStorage.removeItem('finance_app_token');
@@ -221,6 +225,7 @@ function App() {
               <AlertTriangle className="text-red-500 w-12 h-12 mb-4" />
               <h2 className="text-2xl font-bold mb-2">Serviço Indisponível</h2>
               <button onClick={fetchInitialData} className="flex items-center gap-2 bg-primary px-6 py-2 rounded-lg text-slate-900 font-bold hover:bg-emerald-400 mt-4"><RefreshCcw size={18} /> Tentar Novamente</button>
+              <button onClick={handleLogout} className="mt-4 text-sm text-slate-500 underline hover:text-slate-300">Voltar ao Login</button>
           </div>
       );
   }
