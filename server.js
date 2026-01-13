@@ -548,11 +548,10 @@ app.post('/api/transactions', authenticateToken, (req, res) => {
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             
-            // Update bank balance if reconciled
-            if (reconciled) {
-                const modifier = type === 'credito' ? 1 : -1;
-                db.run(`UPDATE banks SET balance = balance + ? WHERE id = ?`, [value * modifier, bankId]);
-            }
+            // Update bank balance based on transaction (regardless of reconciliation status as per request)
+            const modifier = type === 'credito' ? 1 : -1;
+            db.run(`UPDATE banks SET balance = balance + ? WHERE id = ?`, [value * modifier, bankId]);
+            
             res.json({ id: this.lastID });
         }
     );
@@ -571,8 +570,6 @@ app.put('/api/transactions/:id', authenticateToken, (req, res) => {
             (err) => {
                 if (err) return res.status(500).json({ error: err.message });
                 
-                // Recalculate balance logic is complex here, simpler to just recalc bank balance from scratch or handle delta
-                // For simplicity/robustness, let's recalculate the bank balance entirely
                 recalculateBankBalance(bankId);
                 if (oldTx.bank_id !== bankId) recalculateBankBalance(oldTx.bank_id);
 
@@ -599,7 +596,8 @@ app.patch('/api/transactions/:id/reconcile', authenticateToken, (req, res) => {
     db.run(`UPDATE transactions SET reconciled = ? WHERE id = ? AND user_id = ?`, [reconciled ? 1 : 0, req.params.id, req.userId], function(err) {
         if(err) return res.status(500).json({ error: err.message });
         
-        // Update balance
+        // No balance update needed strictly for reconcile flag change if we count all transactions, 
+        // but robust to recalculate to be safe.
         db.get(`SELECT * FROM transactions WHERE id = ?`, [req.params.id], (err, tx) => {
             if(tx) recalculateBankBalance(tx.bank_id);
         });
@@ -617,22 +615,16 @@ app.patch('/api/transactions/batch-update', authenticateToken, (req, res) => {
         [categoryId, req.userId],
         (err) => {
             if (err) return res.status(500).json({ error: err.message });
-            
-            // Recalculate all affected banks (simplified: recalc all user banks)
-            db.all(`SELECT DISTINCT bank_id FROM transactions WHERE id IN (${ids})`, [], (err, rows) => {
-                rows?.forEach(r => recalculateBankBalance(r.bank_id));
-            });
-            
             res.json({ success: true });
         }
     );
 });
 
-// Helper for Balance Recalc
+// Helper for Balance Recalc (Modified to count ALL transactions)
 function recalculateBankBalance(bankId) {
     db.get(
         `SELECT SUM(CASE WHEN type = 'credito' THEN value ELSE -value END) as balance 
-         FROM transactions WHERE bank_id = ? AND reconciled = 1`,
+         FROM transactions WHERE bank_id = ?`, // Removed 'AND reconciled = 1'
         [bankId],
         (err, row) => {
             const newBalance = row && row.balance ? row.balance : 0;
@@ -772,120 +764,389 @@ app.delete('/api/keyword-rules/:id', authenticateToken, (req, res) => {
     });
 });
 
-// RELATÓRIOS
-app.get('/api/reports/cash-flow', authenticateToken, (req, res) => {
+// RELATÓRIOS (UPDATED LOGIC)
+
+app.get('/api/reports/cash-flow', authenticateToken, async (req, res) => {
     const { year, month } = req.query;
-    const startDate = new Date(year, month, 1).toISOString().split('T')[0];
-    const endDate = new Date(year, Number(month) + 1, 0).toISOString().split('T')[0];
+    const y = parseInt(year);
+    const m = month ? parseInt(month) : null;
+    const userId = req.userId;
 
-    db.all(
-        `SELECT * FROM transactions WHERE user_id = ? AND date >= ? AND date <= ? AND reconciled = 1`,
-        [req.userId, startDate, endDate],
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
+    try {
+        let startDate, endDate;
+        if (m !== null) {
+            startDate = new Date(y, m, 1).toISOString().split('T')[0];
+            endDate = new Date(m === 11 ? y + 1 : y, m === 11 ? 0 : m + 1, 1).toISOString().split('T')[0];
+        } else {
+            startDate = new Date(y, 0, 1).toISOString().split('T')[0];
+            endDate = new Date(y + 1, 0, 1).toISOString().split('T')[0];
+        }
 
-            let totalReceitas = 0;
-            let totalDespesas = 0;
-            const receitasByCat = {};
-            const despesasByCat = {};
-
-            rows.forEach(t => {
-                if (t.type === 'credito') {
-                    totalReceitas += t.value;
-                    receitasByCat[t.category_id] = (receitasByCat[t.category_id] || 0) + t.value;
-                } else {
-                    totalDespesas += t.value;
-                    despesasByCat[t.category_id] = (despesasByCat[t.category_id] || 0) + t.value;
+        const balancePromise = new Promise((resolve, reject) => {
+            db.get(
+                `SELECT SUM(CASE WHEN type = 'credito' THEN value ELSE -value END) as balance 
+                 FROM transactions WHERE user_id = ? AND date < ?`,
+                [userId, startDate],
+                (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row?.balance || 0);
                 }
-            });
+            );
+        });
 
-            // Get Category Names
-            db.all(`SELECT id, name FROM categories WHERE user_id = ?`, [req.userId], (err, cats) => {
-                const catMap = {};
-                cats.forEach(c => catMap[c.id] = c.name);
+        const startBalance = await balancePromise;
 
-                const mapToArray = (obj) => Object.entries(obj).map(([id, val]) => ({ name: catMap[id] || 'Outros', value: val })).sort((a,b) => b.value - a.value);
+        db.all(
+            `SELECT t.*, c.name as category_name, c.type as category_type
+             FROM transactions t
+             LEFT JOIN categories c ON t.category_id = c.id
+             WHERE t.user_id = ? AND t.date >= ? AND t.date < ?`,
+            [userId, startDate, endDate],
+            (err, rows) => {
+                if (err) return res.status(500).json({ error: err.message });
 
-                // Calculate balances (initial from banks summation up to start date is heavy, simplified: get current banks balance - sum of future txs? No.
-                // Simplified approach: just show flow for the month)
+                const totalReceitas = rows.filter(r => r.type === 'credito').reduce((sum, r) => sum + r.value, 0);
+                const totalDespesas = rows.filter(r => r.type === 'debito').reduce((sum, r) => sum + r.value, 0);
                 
+                const receitasCat = {};
+                const despesasCat = {};
+
+                rows.forEach(r => {
+                    const catName = r.category_name || 'Sem Categoria';
+                    if (r.type === 'credito') {
+                        receitasCat[catName] = (receitasCat[catName] || 0) + r.value;
+                    } else {
+                        despesasCat[catName] = (despesasCat[catName] || 0) + r.value;
+                    }
+                });
+
                 res.json({
-                    startBalance: 0, // Placeholder, requires complex calculation
-                    endBalance: totalReceitas - totalDespesas,
+                    startBalance,
                     totalReceitas,
                     totalDespesas,
-                    receitasByCategory: mapToArray(receitasByCat),
-                    despesasByCategory: mapToArray(despesasByCat)
+                    endBalance: startBalance + totalReceitas - totalDespesas,
+                    receitasByCategory: Object.entries(receitasCat).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value),
+                    despesasByCategory: Object.entries(despesasCat).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value)
                 });
+            }
+        );
+
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/reports/daily-flow', authenticateToken, (req, res) => {
+    const { startDate, endDate } = req.query;
+    const userId = req.userId;
+
+    if (!startDate || !endDate) return res.status(400).json({ error: 'Start and End date required' });
+
+    db.all(
+        `SELECT date, type, SUM(value) as total 
+         FROM transactions 
+         WHERE user_id = ? AND date BETWEEN ? AND ? 
+         GROUP BY date, type 
+         ORDER BY date ASC`,
+        [userId, startDate, endDate],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            // Format for chart: [{ date: '...', income: 100, expense: 50, net: 50 }, ...]
+            const grouped = {};
+            rows.forEach(row => {
+                if (!grouped[row.date]) grouped[row.date] = { date: row.date, income: 0, expense: 0, net: 0 };
+                if (row.type === 'credito') grouped[row.date].income += row.total;
+                else grouped[row.date].expense += row.total;
+                grouped[row.date].net = grouped[row.date].income - grouped[row.date].expense;
             });
+            
+            res.json(Object.values(grouped));
         }
     );
 });
 
-// Rota DRE Simplificada
 app.get('/api/reports/dre', authenticateToken, (req, res) => {
     const { year, month } = req.query;
-    const startDate = new Date(year, month, 1).toISOString().split('T')[0];
-    const endDate = new Date(year, Number(month) + 1, 0).toISOString().split('T')[0];
+    const userId = req.userId;
+    const y = parseInt(year);
+    const m = month ? parseInt(month) : null;
 
-    // Join with categories to get group_type
-    db.all(
-        `SELECT t.value, t.type, c.group_type 
-         FROM transactions t 
-         LEFT JOIN categories c ON t.category_id = c.id
-         WHERE t.user_id = ? AND t.date >= ? AND t.date <= ? AND t.reconciled = 1`,
-        [req.userId, startDate, endDate],
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
+    let query = `SELECT t.*, c.name as category_name, c.type as category_type 
+                 FROM transactions t 
+                 LEFT JOIN categories c ON t.category_id = c.id 
+                 WHERE t.user_id = ? AND strftime('%Y', t.date) = ?`;
+    
+    const params = [userId, String(y)];
 
-            const totals = {
-                receita_bruta: 0, impostos: 0, cmv: 0, 
-                despesa_operacional: 0, despesa_pessoal: 0, despesa_administrativa: 0,
-                receita_financeira: 0, despesa_financeira: 0,
-                receita_nao_operacional: 0, despesa_nao_operacional: 0,
-                outras_receitas: 0
+    if (m !== null) {
+        query += ` AND strftime('%m', t.date) = ?`;
+        params.push(String(m + 1).padStart(2, '0'));
+    }
+
+    db.all(query, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        let dre = {
+            receitaBruta: 0,
+            deducoes: 0,
+            cmv: 0,
+            despesasOperacionais: 0,
+            resultadoFinanceiro: 0,
+            receitaNaoOperacional: 0,
+            despesaNaoOperacional: 0,
+            impostos: 0 
+        };
+
+        rows.forEach(t => {
+            const cat = (t.category_name || '').toLowerCase();
+            const val = t.value;
+            const isCredit = t.type === 'credito';
+            
+            if (cat.includes('transferências internas') || 
+                cat.includes('aportes de sócios') || 
+                cat.includes('distribuição de lucros') ||
+                cat.includes('retirada de sócios')) {
+                return;
+            }
+
+            if (cat.includes('vendas de mercadorias') || 
+                cat.includes('prestação de serviços') || 
+                cat.includes('comissões recebidas') ||
+                cat.includes('receita de aluguel') ||
+                cat.includes('outras receitas operacionais')) {
+                 if (isCredit) dre.receitaBruta += val;
+            }
+            else if (cat.includes('impostos e taxas') || 
+                     cat.includes('impostos sobre vendas') ||
+                     cat.includes('icms') || cat.includes('iss') || cat.includes('das') ||
+                     cat.includes('devoluções de vendas') ||
+                     cat.includes('descontos concedidos')) {
+                 if (!isCredit) dre.deducoes += val;
+            }
+            else if (cat.includes('compra de mercadorias') || 
+                     cat.includes('matéria-prima') || 
+                     cat.includes('fretes e transportes') || 
+                     cat.includes('custos diretos')) {
+                 if (!isCredit) dre.cmv += val;
+            }
+            else if (cat.includes('receita financeira') || 
+                     cat.includes('devoluções de despesas') || 
+                     cat.includes('reembolsos de clientes')) {
+                 if (isCredit) dre.resultadoFinanceiro += val;
+            }
+            else if (cat.includes('despesas financeiras') || 
+                     cat.includes('juros sobre empréstimos') || 
+                     cat.includes('multas') || 
+                     cat.includes('iof')) {
+                 if (!isCredit) dre.resultadoFinanceiro -= val;
+            }
+            else if (cat.includes('receitas não operacionais') || 
+                     cat.includes('venda de ativo')) {
+                 if (isCredit) dre.receitaNaoOperacional += val;
+            }
+            else if (cat.includes('despesas não operacionais') || 
+                     cat.includes('baixa de bens')) {
+                 if (!isCredit) dre.despesaNaoOperacional += val;
+            }
+            else if (cat.includes('irpj') || cat.includes('csll')) {
+                 if (!isCredit) dre.impostos += val;
+            }
+            else if (!isCredit) {
+                dre.despesasOperacionais += val;
+            }
+        });
+
+        const receitaLiquida = dre.receitaBruta - dre.deducoes;
+        const resultadoBruto = receitaLiquida - dre.cmv;
+        const resultadoOperacional = resultadoBruto - dre.despesasOperacionais;
+        const resultadoNaoOperacionalTotal = dre.receitaNaoOperacional - dre.despesaNaoOperacional;
+        const resultadoAntesImpostos = resultadoOperacional + dre.resultadoFinanceiro + resultadoNaoOperacionalTotal;
+        const lucroLiquido = resultadoAntesImpostos - dre.impostos;
+
+        res.json({
+            receitaBruta: dre.receitaBruta,
+            deducoes: dre.deducoes,
+            receitaLiquida,
+            cmv: dre.cmv,
+            resultadoBruto,
+            despesasOperacionais: dre.despesasOperacionais,
+            resultadoOperacional,
+            resultadoFinanceiro: dre.resultadoFinanceiro,
+            resultadoNaoOperacional: resultadoNaoOperacionalTotal,
+            impostos: dre.impostos,
+            lucroLiquido,
+            resultadoAntesImpostos
+        });
+    });
+});
+
+app.get('/api/reports/analysis', authenticateToken, (req, res) => {
+    const { year, month } = req.query;
+    const userId = req.userId;
+    const y = parseInt(year);
+    const m = month ? parseInt(month) : null;
+
+    let query = `SELECT t.*, c.name as category_name, c.type as category_type 
+                 FROM transactions t 
+                 LEFT JOIN categories c ON t.category_id = c.id 
+                 WHERE t.user_id = ? AND strftime('%Y', t.date) = ?`;
+    
+    const params = [userId, String(y)];
+
+    if (m !== null) {
+        query += ` AND strftime('%m', t.date) = ?`;
+        params.push(String(m + 1).padStart(2, '0'));
+    }
+
+    db.all(query, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        const receitas = {};
+        const despesas = {};
+        let totalReceitas = 0;
+        let totalDespesas = 0;
+
+        let dre = {
+            receitaBruta: 0,
+            deducoes: 0,
+            cmv: 0,
+            despesasOperacionais: 0,
+            resultadoFinanceiro: 0,
+            receitaNaoOperacional: 0,
+            despesaNaoOperacional: 0,
+            impostos: 0 
+        };
+
+        rows.forEach(r => {
+            const catName = r.category_name || 'Outros';
+            if (r.type === 'credito') {
+                receitas[catName] = (receitas[catName] || 0) + r.value;
+                totalReceitas += r.value;
+            } else {
+                despesas[catName] = (despesas[catName] || 0) + r.value;
+                totalDespesas += r.value;
+            }
+
+            // DRE Categorization Logic duplicated for consistency with DRE endpoint
+            const cat = (r.category_name || '').toLowerCase();
+            const val = r.value;
+            const isCredit = r.type === 'credito';
+
+            if (cat.includes('transferências internas') || cat.includes('aportes de sócios') || cat.includes('distribuição de lucros')) return;
+
+            if (cat.includes('vendas de mercadorias') || cat.includes('prestação de serviços') || cat.includes('comissões recebidas') || cat.includes('receita de aluguel')) {
+                 if (isCredit) dre.receitaBruta += val;
+            }
+            else if (cat.includes('impostos e taxas') || cat.includes('icms') || cat.includes('iss') || cat.includes('das') || cat.includes('devoluções')) {
+                 if (!isCredit) dre.deducoes += val;
+            }
+            else if (cat.includes('compra de mercadorias') || cat.includes('matéria-prima') || cat.includes('fretes') || cat.includes('custos diretos')) {
+                 if (!isCredit) dre.cmv += val;
+            }
+            else if (cat.includes('receita financeira')) {
+                 if (isCredit) dre.resultadoFinanceiro += val;
+            }
+            else if (cat.includes('despesas financeiras') || cat.includes('juros')) {
+                 if (!isCredit) dre.resultadoFinanceiro -= val;
+            }
+            else if (cat.includes('receitas não operacionais')) {
+                 if (isCredit) dre.receitaNaoOperacional += val;
+            }
+            else if (cat.includes('despesas não operacionais')) {
+                 if (!isCredit) dre.despesaNaoOperacional += val;
+            }
+            else if (cat.includes('irpj') || cat.includes('csll')) {
+                 if (!isCredit) dre.impostos += val;
+            }
+            else if (!isCredit) {
+                dre.despesasOperacionais += val;
+            }
+        });
+
+        // KPI Calculations
+        const receitaLiquida = dre.receitaBruta - dre.deducoes;
+        const resultadoBruto = receitaLiquida - dre.cmv;
+        const resultadoOperacional = resultadoBruto - dre.despesasOperacionais;
+        const resultadoNaoOperacionalTotal = dre.receitaNaoOperacional - dre.despesaNaoOperacional;
+        const resultadoAntesImpostos = resultadoOperacional + dre.resultadoFinanceiro + resultadoNaoOperacionalTotal;
+        const lucroLiquido = resultadoAntesImpostos - dre.impostos;
+
+        const margemContribuicaoVal = receitaLiquida - dre.cmv;
+        const margemContribuicaoPct = receitaLiquida > 0 ? (margemContribuicaoVal / receitaLiquida) * 100 : 0;
+        const resultadoOperacionalPct = receitaLiquida > 0 ? (resultadoOperacional / receitaLiquida) * 100 : 0;
+        const resultadoLiquidoPct = receitaLiquida > 0 ? (lucroLiquido / receitaLiquida) * 100 : 0;
+
+        res.json({
+            receitas,
+            despesas,
+            totalReceitas,
+            totalDespesas,
+            kpis: {
+                margemContribuicaoPct,
+                resultadoOperacionalPct,
+                resultadoLiquidoPct
+            }
+        });
+    });
+});
+
+app.get('/api/reports/forecasts', authenticateToken, (req, res) => {
+    const { year, month } = req.query;
+    const userId = req.userId;
+    const y = parseInt(year);
+    const m = month ? parseInt(month) : null;
+
+    let query = `SELECT f.*, c.name as category_name 
+                 FROM forecasts f
+                 LEFT JOIN categories c ON f.category_id = c.id 
+                 WHERE f.user_id = ? AND strftime('%Y', f.date) = ?`;
+    
+    const params = [userId, String(y)];
+
+    if (m !== null) {
+        query += ` AND strftime('%m', f.date) = ?`;
+        params.push(String(m + 1).padStart(2, '0'));
+    }
+
+    db.all(query, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        let summary = {
+            predictedIncome: 0,
+            predictedExpense: 0,
+            realizedIncome: 0,
+            realizedExpense: 0,
+            pendingIncome: 0,
+            pendingExpense: 0
+        };
+
+        const items = rows.map(r => {
+            const val = r.value;
+            const isCredit = r.type === 'credito';
+            const isRealized = Boolean(r.realized);
+
+            // Total Predicted
+            if (isCredit) summary.predictedIncome += val;
+            else summary.predictedExpense += val;
+
+            // Realized vs Pending
+            if (isRealized) {
+                if (isCredit) summary.realizedIncome += val;
+                else summary.realizedExpense += val;
+            } else {
+                if (isCredit) summary.pendingIncome += val;
+                else summary.pendingExpense += val;
+            }
+
+            return {
+                ...r,
+                realized: isRealized
             };
+        });
 
-            rows.forEach(r => {
-                const val = r.value;
-                const group = r.group_type || (r.type === 'credito' ? 'outras_receitas' : 'despesa_operacional');
-                
-                if (totals[group] !== undefined) {
-                    totals[group] += val;
-                }
-            });
-
-            // Cálculos DRE
-            const receitaBruta = totals.receita_bruta + totals.outras_receitas;
-            const deducoes = totals.impostos; // Simplificado
-            const receitaLiquida = receitaBruta - deducoes;
-            const lucroBruto = receitaLiquida - totals.cmv;
-            
-            const totalDespesasOp = totals.despesa_operacional + totals.despesa_pessoal + totals.despesa_administrativa;
-            const resultadoOperacional = lucroBruto - totalDespesasOp;
-            
-            const resultadoFinanceiro = totals.receita_financeira - totals.despesa_financeira;
-            const resultadoNaoOperacional = totals.receita_nao_operacional - totals.despesa_nao_operacional;
-            
-            const resultadoAntesIR = resultadoOperacional + resultadoFinanceiro + resultadoNaoOperacional;
-            const lucroLiquido = resultadoAntesIR; // Sem IR calculado aqui
-
-            res.json({
-                receitaBruta,
-                deducoes,
-                receitaLiquida,
-                cmv: totals.cmv,
-                resultadoBruto: lucroBruto,
-                despesasOperacionais: totalDespesasOp,
-                resultadoOperacional,
-                resultadoFinanceiro,
-                resultadoNaoOperacional,
-                resultadoAntesImpostos: resultadoAntesIR,
-                impostos: 0, // IR/CSLL provision not implemented
-                lucroLiquido
-            });
-        }
-    );
+        res.json({ summary, items });
+    });
 });
 
 // Admin Routes (Simplificado)

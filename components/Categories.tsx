@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Category, CategoryType } from '../types';
-import { Plus, Trash2, Tag, ArrowUpCircle, ArrowDownCircle, Settings, X, Save } from 'lucide-react';
+import { Plus, Trash2, Tag, ArrowUpCircle, ArrowDownCircle, Settings, X, Save, HelpCircle } from 'lucide-react';
 
 interface CategoriesProps {
   categories: Category[];
@@ -11,22 +11,22 @@ interface CategoriesProps {
 
 // Grupos baseados na estrutura de DRE do server.js
 const INCOME_GROUPS = [
-    { id: 'receita_bruta', label: 'Receita Bruta de Vendas/Serviços' },
-    { id: 'outras_receitas', label: 'Outras Receitas Operacionais' },
-    { id: 'receita_financeira', label: 'Receitas Financeiras' },
-    { id: 'receita_nao_operacional', label: 'Receitas Não Operacionais' },
-    { id: 'nao_operacional', label: 'Movimentações Internas (Não afeta DRE)' }
+    { id: 'receita_bruta', label: 'Receita Bruta de Vendas/Serviços', desc: 'Vendas de produtos ou serviços (Nota Fiscal).' },
+    { id: 'outras_receitas', label: 'Outras Receitas Operacionais', desc: 'Receitas acessórias da operação principal.' },
+    { id: 'receita_financeira', label: 'Receitas Financeiras', desc: 'Rendimentos de aplicações, Juros recebidos.' },
+    { id: 'receita_nao_operacional', label: 'Receitas Não Operacionais', desc: 'Venda de bens do ativo, Ganhos de capital.' },
+    { id: 'nao_operacional', label: 'Movimentações Internas', desc: 'Transferências entre contas, Aportes de sócios (Não afeta lucro).' }
 ];
 
 const EXPENSE_GROUPS = [
-    { id: 'cmv', label: 'Custos (CMV / CSP)' },
-    { id: 'despesa_operacional', label: 'Despesas Operacionais Gerais' },
-    { id: 'despesa_pessoal', label: 'Despesas com Pessoal' },
-    { id: 'despesa_administrativa', label: 'Despesas Administrativas' },
-    { id: 'impostos', label: 'Impostos e Taxas' },
-    { id: 'despesa_financeira', label: 'Despesas Financeiras' },
-    { id: 'despesa_nao_operacional', label: 'Despesas Não Operacionais' },
-    { id: 'nao_operacional', label: 'Movimentações Internas (Não afeta DRE)' }
+    { id: 'cmv', label: 'Custos (CMV / CSP)', desc: 'Custo direto para produzir ou comprar o que foi vendido.' },
+    { id: 'despesa_operacional', label: 'Despesas Operacionais Gerais', desc: 'Gastos para manter a empresa (Marketing, Aluguel, Sistemas).' },
+    { id: 'despesa_pessoal', label: 'Despesas com Pessoal', desc: 'Salários, Pró-labore, Férias, 13º.' },
+    { id: 'despesa_administrativa', label: 'Despesas Administrativas', desc: 'Material de escritório, Limpeza, Copa.' },
+    { id: 'impostos', label: 'Impostos e Taxas', desc: 'DAS, ICMS, ISS, Taxas diversas.' },
+    { id: 'despesa_financeira', label: 'Despesas Financeiras', desc: 'Juros pagos, Multas, Tarifas bancárias.' },
+    { id: 'despesa_nao_operacional', label: 'Despesas Não Operacionais', desc: 'Perdas de capital, Baixa de bens.' },
+    { id: 'nao_operacional', label: 'Movimentações Internas', desc: 'Transferências, Distribuição de Lucros (Não afeta lucro operacional).' }
 ];
 
 const Categories: React.FC<CategoriesProps> = ({ categories, onAddCategory, onDeleteCategory, onUpdateCategory }) => {
@@ -75,6 +75,8 @@ const Categories: React.FC<CategoriesProps> = ({ categories, onAddCategory, onDe
       const list = type === CategoryType.INCOME ? INCOME_GROUPS : EXPENSE_GROUPS;
       return list.find(g => g.id === groupId)?.label || groupId;
   };
+
+  const activeGroupList = editingCategory?.type === CategoryType.INCOME ? INCOME_GROUPS : EXPENSE_GROUPS;
 
   return (
     <div className="space-y-6">
@@ -230,14 +232,31 @@ const Categories: React.FC<CategoriesProps> = ({ categories, onAddCategory, onDe
                           <p className="text-white font-medium text-lg">{editingCategory.name}</p>
                       </div>
                       
-                      <div>
-                          <label className="text-sm font-medium text-slate-300 block mb-2">Grupo Contábil (Para Relatórios/DRE)</label>
+                      <div className="relative">
+                          <div className="flex items-center gap-2 mb-2">
+                              <label className="text-sm font-medium text-slate-300">Grupo Contábil</label>
+                              <div className="group relative">
+                                  <HelpCircle size={16} className="text-slate-500 cursor-help hover:text-primary transition-colors"/>
+                                  <div className="absolute left-full top-0 ml-2 w-64 bg-slate-800 border border-slate-700 p-3 rounded-lg shadow-xl text-xs text-slate-300 z-50 hidden group-hover:block">
+                                      <p className="font-bold text-white mb-2 border-b border-slate-700 pb-1">Guia de Grupos</p>
+                                      <ul className="space-y-1.5">
+                                          {activeGroupList.map(g => (
+                                              <li key={g.id}>
+                                                  <span className="text-primary font-semibold block">{g.label}</span>
+                                                  <span className="opacity-80">{g.desc}</span>
+                                              </li>
+                                          ))}
+                                      </ul>
+                                  </div>
+                              </div>
+                          </div>
+                          
                           <select 
                               className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white outline-none focus:border-primary"
                               value={selectedGroup}
                               onChange={(e) => setSelectedGroup(e.target.value)}
                           >
-                              {(editingCategory.type === CategoryType.INCOME ? INCOME_GROUPS : EXPENSE_GROUPS).map(g => (
+                              {activeGroupList.map(g => (
                                   <option key={g.id} value={g.id}>{g.label}</option>
                               ))}
                           </select>

@@ -67,14 +67,18 @@ function App() {
     }
   }, [isAuthenticated, token, user]);
 
+  // CÁLCULO DE SALDO (Conciliado + Pendente conforme solicitado)
   const banksWithBalance = useMemo(() => {
       return banks.map(bank => {
-          const bankTxs = transactions.filter(t => t.bankId === bank.id && t.reconciled);
+          // Filtra transações deste banco (Removido filtro && t.reconciled para considerar tudo)
+          const bankTxs = transactions.filter(t => t.bankId === bank.id);
+          
           const balance = bankTxs.reduce((acc, t) => {
               const val = Math.abs(t.value);
               const isCredit = t.type === 'credito' || String(t.type).toLowerCase().includes('receita');
               return isCredit ? acc + val : acc - val;
           }, 0);
+          
           return { ...bank, balance };
       });
   }, [banks, transactions]);

@@ -74,19 +74,11 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
 
   // Lógica de cálculo corrigida
   const calculateProjectedBalance = (bank: Bank) => {
-      // 1. Saldo Atual (Já vem do App.tsx como apenas conciliado)
+      // 1. Saldo Atual (Já inclui todos os lançamentos: pendentes e conciliados, pois foi calculado no App.tsx)
       let projected = bank.balance;
 
-      // 2. Adicionar Lançamentos Pendentes (Transações existentes mas não conciliadas)
-      const pendingTransactions = transactions.filter(t => t.bankId === bank.id && !t.reconciled);
-      pendingTransactions.forEach(t => {
-          const val = Math.abs(t.value);
-          const isCredit = t.type === TransactionType.CREDIT;
-          projected += isCredit ? val : -val;
-      });
-
-      // 3. Adicionar Previsões Futuras (Forecasts não realizados)
-      // Considerando todas as previsões futuras cadastradas (ou filtrar por mês se desejado)
+      // 2. Adicionar Previsões Futuras (Forecasts não realizados)
+      // Considerando todas as previsões futuras cadastradas
       const bankForecasts = forecasts.filter(f => f.bankId === bank.id && !f.realized);
       bankForecasts.forEach(f => {
           const val = Math.abs(f.value);
@@ -130,12 +122,14 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
   const topIncomeCategories = getTopCategories(TransactionType.CREDIT);
   const topExpenseCategories = getTopCategories(TransactionType.DEBIT);
 
-  const allTimeIncome = transactions.filter(t => t.reconciled && t.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
-  const allTimeExpense = transactions.filter(t => t.reconciled && t.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
+  // Alterado: Remove o filtro de conciliado para considerar tudo
+  const allTimeIncome = transactions.filter(t => t.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
+  const allTimeExpense = transactions.filter(t => t.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
   const totalBalance = allTimeIncome - allTimeExpense;
 
-  const monthRealizedIncome = currentMonthTransactions.filter(t => t.reconciled && t.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
-  const monthRealizedExpense = currentMonthTransactions.filter(t => t.reconciled && t.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
+  // No Mês
+  const monthRealizedIncome = currentMonthTransactions.filter(t => t.type === TransactionType.CREDIT).reduce((acc, curr) => acc + curr.value, 0);
+  const monthRealizedExpense = currentMonthTransactions.filter(t => t.type === TransactionType.DEBIT).reduce((acc, curr) => acc + curr.value, 0);
 
   const currentMonthForecasts = forecasts.filter(f => {
       const d = new Date(f.date);
@@ -306,7 +300,7 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
             <div className="relative z-10">
                 <p className="text-slate-400 text-xs font-medium mb-1">Saldo Atual</p>
                 <h2 className="text-2xl font-bold text-white mb-1">R$ {totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
-                <p className="text-[10px] text-slate-500">Apenas lançamentos conciliados</p>
+                <p className="text-[10px] text-slate-500">Conciliados e Pendentes</p>
             </div>
         </div>
 
@@ -316,7 +310,7 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
                 <CheckCircle2 size={48} className="text-emerald-500"/>
             </div>
             <div className="relative z-10">
-                <p className="text-emerald-500 text-xs font-medium mb-1 flex items-center gap-1"><TrendingUp size={14}/> Receitas Realizadas</p>
+                <p className="text-emerald-500 text-xs font-medium mb-1 flex items-center gap-1"><TrendingUp size={14}/> Receitas</p>
                 <h2 className="text-2xl font-bold text-emerald-400 mb-1">R$ {monthRealizedIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
                 <p className="text-[10px] text-slate-500">Previsto: <span className="text-emerald-500/70">+ R$ {monthForecastIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></p>
             </div>
@@ -328,7 +322,7 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userId, transactions, bank
                 <ShieldCheck size={48} className="text-rose-500"/>
             </div>
             <div className="relative z-10">
-                <p className="text-rose-500 text-xs font-medium mb-1 flex items-center gap-1"><TrendingDown size={14}/> Despesas Realizadas</p>
+                <p className="text-rose-500 text-xs font-medium mb-1 flex items-center gap-1"><TrendingDown size={14}/> Despesas</p>
                 <h2 className="text-2xl font-bold text-rose-400 mb-1">R$ {monthRealizedExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
                 <p className="text-[10px] text-slate-500">Previsto: <span className="text-rose-500/70">+ R$ {monthForecastExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></p>
             </div>
