@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, LayoutDashboard, FileText, Trash2, LogOut, ShieldAlert, BarChart, Eye, X, Download, Calendar, Receipt, ArrowUpRight, FileSpreadsheet, Landmark, Plus, Upload, Edit2, Save, Ban, Search, Printer, RefreshCcw } from 'lucide-react';
+import { Users, LayoutDashboard, FileText, Trash2, LogOut, ShieldAlert, BarChart, Eye, X, Download, Calendar, Receipt, ArrowUpRight, FileSpreadsheet, Landmark, Plus, Upload, Edit2, Save, Ban, Search, Printer, RefreshCcw, FileCode, HardDrive } from 'lucide-react';
 
 interface AdminPanelProps {
   token: string;
@@ -16,7 +16,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
   
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [userDetails, setUserDetails] = useState<any>(null);
-  const [detailTab, setDetailTab] = useState<'transactions' | 'forecasts' | 'files'>('transactions');
+  // detailTab controla a visualização dentro do modal: Lançamentos ou Arquivos OFX
+  const [detailTab, setDetailTab] = useState<'transactions' | 'ofx_files'>('transactions');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -82,6 +83,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
   const handleOpenUser = async (user: any) => {
       setSelectedUser(user); 
       setLoading(true);
+      setDetailTab('transactions'); // Reset para a tab principal
       const today = new Date(); 
       setStartDate(new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0]); 
       setEndDate(new Date(today.getFullYear(), 11, 31).toISOString().split('T')[0]);
@@ -196,34 +198,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
     document.body.removeChild(link);
   };
 
-  const exportToXML = (transactions: any[], userName: string) => {
-    if (!transactions || transactions.length === 0) return alert("Sem dados para exportar.");
-
-    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<FinancialTransactions>\n';
-    xml += `  <Company>${userName}</Company>\n`;
-    xml += `  <ExportDate>${new Date().toISOString()}</ExportDate>\n`;
-    xml += '  <Transactions>\n';
+  const downloadOriginalOFX = (fileName: string, content: string) => {
+    if (!content) return alert("Conteúdo do arquivo vazio.");
     
-    transactions.forEach(t => {
-        xml += '    <Transaction>\n';
-        xml += `      <ID>${t.id}</ID>\n`;
-        xml += `      <Date>${t.date}</Date>\n`;
-        xml += `      <Description>${(t.description || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</Description>\n`;
-        xml += `      <Value>${t.value}</Value>\n`;
-        xml += `      <Type>${t.type}</Type>\n`;
-        xml += `      <Category>${t.category_name || ''}</Category>\n`;
-        xml += `      <Bank>${t.bank_name || ''}</Bank>\n`;
-        xml += '    </Transaction>\n';
-    });
-    
-    xml += '  </Transactions>\n';
-    xml += '</FinancialTransactions>';
-
-    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' });
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `extrato_${userName.replace(/\s+/g, '_')}.xml`);
+    link.setAttribute("download", fileName || 'arquivo.ofx');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -231,7 +213,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
 
   const filterByDate = (items: any[]) => items?.filter(item => { 
       const d = item.date || item.import_date; 
-      return d && d.split('T')[0] >= startDate && d.split('T')[0] <= endDate; 
+      if (!d) return false;
+      return d.split('T')[0] >= startDate && d.split('T')[0] <= endDate; 
   }) || [];
 
   return (
@@ -405,40 +388,151 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
           )}
       </main>
 
-      {/* User Details Modal (Atualizado com Exportação) */}
+      {/* User Details Modal (Atualizado com Filtros e OFX Original) */}
       {selectedUser && userDetails && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
               <div className="bg-slate-900 border border-slate-700 w-full max-w-5xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-                  <div className="p-6 border-b border-slate-800 flex justify-between bg-slate-950">
-                      <div className="flex flex-col">
+                  <div className="p-6 border-b border-slate-800 flex justify-between bg-slate-950 items-center">
+                      <div className="flex flex-col gap-1">
                           <h2 className="text-2xl font-bold text-white">{selectedUser.razao_social}</h2>
-                          <div className="flex gap-2 mt-2">
-                              <button 
-                                onClick={() => exportToCSV(userDetails.transactions, selectedUser.razao_social)}
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded flex items-center gap-1"
-                              >
-                                  <FileSpreadsheet size={14}/> Exportar Excel/CSV
-                              </button>
-                              <button 
-                                onClick={() => exportToXML(userDetails.transactions, selectedUser.razao_social)}
-                                className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded flex items-center gap-1"
-                              >
-                                  <FileText size={14}/> Exportar XML
-                              </button>
+                          <div className="flex gap-4 text-xs text-slate-400">
+                              <span>CNPJ: {selectedUser.cnpj}</span>
+                              <span>Email: {selectedUser.email}</span>
                           </div>
                       </div>
-                      <button onClick={() => setSelectedUser(null)} className="text-slate-400 hover:text-white"><X size={24}/></button>
+                      <button onClick={() => setSelectedUser(null)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-full"><X size={20}/></button>
                   </div>
-                  <div className="flex-1 overflow-auto p-6">
-                      <h3 className="text-white font-bold mb-4">Lançamentos</h3>
-                      <table className="w-full text-sm text-left">
-                          <thead className="text-slate-500 border-b border-slate-800"><tr><th>Data</th><th>Descrição</th><th className="text-right">Valor</th></tr></thead>
-                          <tbody className="divide-y divide-slate-800">
-                              {filterByDate(userDetails.transactions).map((t: any) => (
-                                  <tr key={t.id}><td className="py-2 text-slate-400">{t.date}</td><td className="py-2 text-white">{t.description}</td><td className="py-2 text-right text-slate-300">{t.value}</td></tr>
-                              ))}
-                          </tbody>
-                      </table>
+
+                  {/* Abas e Filtros */}
+                  <div className="px-6 pt-4 bg-slate-950 border-b border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
+                      <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800">
+                          <button 
+                            onClick={() => setDetailTab('transactions')}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${detailTab === 'transactions' ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                          >
+                              Lançamentos
+                          </button>
+                          <button 
+                            onClick={() => setDetailTab('ofx_files')}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${detailTab === 'ofx_files' ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                          >
+                              Arquivos OFX
+                          </button>
+                      </div>
+
+                      {detailTab === 'transactions' && (
+                          <div className="flex items-center gap-3 bg-slate-900 p-1.5 rounded-lg border border-slate-800">
+                              <span className="text-xs text-slate-500 font-bold px-2">PERÍODO:</span>
+                              <input 
+                                  type="date" 
+                                  value={startDate} 
+                                  onChange={e => setStartDate(e.target.value)} 
+                                  className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white outline-none focus:border-slate-500"
+                              />
+                              <span className="text-slate-600 text-xs">até</span>
+                              <input 
+                                  type="date" 
+                                  value={endDate} 
+                                  onChange={e => setEndDate(e.target.value)} 
+                                  className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white outline-none focus:border-slate-500"
+                              />
+                              <div className="w-px h-6 bg-slate-700 mx-1"></div>
+                              <button 
+                                onClick={() => exportToCSV(filterByDate(userDetails.transactions), selectedUser.razao_social)}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded flex items-center gap-1 transition-colors"
+                                title="Exportar Excel"
+                              >
+                                  <FileSpreadsheet size={14}/> CSV
+                              </button>
+                          </div>
+                      )}
+                  </div>
+
+                  <div className="flex-1 overflow-auto p-6 bg-slate-900">
+                      {detailTab === 'transactions' ? (
+                          <>
+                            <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                                <Receipt size={20} className="text-emerald-500"/>
+                                Histórico de Lançamentos
+                            </h3>
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-slate-500 border-b border-slate-800 bg-slate-900 sticky top-0">
+                                    <tr>
+                                        <th className="py-3">Data</th>
+                                        <th className="py-3">Descrição</th>
+                                        <th className="py-3">Banco</th>
+                                        <th className="py-3 text-right">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800">
+                                    {filterByDate(userDetails.transactions).length === 0 ? (
+                                        <tr><td colSpan={4} className="py-8 text-center text-slate-500">Nenhum lançamento neste período.</td></tr>
+                                    ) : (
+                                        filterByDate(userDetails.transactions).map((t: any) => (
+                                            <tr key={t.id} className="hover:bg-slate-800/50">
+                                                <td className="py-3 text-slate-400 font-mono text-xs">{new Date(t.date).toLocaleDateString()}</td>
+                                                <td className="py-3 text-white">
+                                                    {t.description}
+                                                    <span className="block text-xs text-slate-500">{t.category_name || 'Sem categoria'}</span>
+                                                </td>
+                                                <td className="py-3 text-slate-400 text-xs">{t.bank_name}</td>
+                                                <td className={`py-3 text-right font-medium ${t.type==='credito'?'text-emerald-500':'text-rose-500'}`}>
+                                                    R$ {t.value.toFixed(2)}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                          </>
+                      ) : (
+                          <>
+                            <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                                <HardDrive size={20} className="text-blue-500"/>
+                                Arquivos OFX Importados
+                            </h3>
+                            <div className="border border-slate-800 rounded-xl overflow-hidden">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="text-slate-500 border-b border-slate-800 bg-slate-950">
+                                        <tr>
+                                            <th className="px-6 py-3">Data Importação</th>
+                                            <th className="px-6 py-3">Nome do Arquivo</th>
+                                            <th className="px-6 py-3 text-center">Itens</th>
+                                            <th className="px-6 py-3 text-right">Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800 bg-slate-900">
+                                        {(!userDetails.ofxImports || userDetails.ofxImports.length === 0) ? (
+                                            <tr><td colSpan={4} className="px-6 py-8 text-center text-slate-500">Nenhum arquivo importado.</td></tr>
+                                        ) : (
+                                            userDetails.ofxImports.map((file: any) => (
+                                                <tr key={file.id} className="hover:bg-slate-800/50">
+                                                    <td className="px-6 py-4 text-slate-400 text-xs font-mono">
+                                                        {new Date(file.import_date || file.importDate).toLocaleString()}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-white font-medium flex items-center gap-2">
+                                                        <FileCode size={16} className="text-blue-400"/>
+                                                        {file.file_name || file.fileName}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center text-slate-400">
+                                                        {file.transaction_count || file.transactionCount}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <button 
+                                                            onClick={() => downloadOriginalOFX(file.file_name || file.fileName, file.content)}
+                                                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 border border-blue-600/20 rounded text-xs font-bold transition-colors"
+                                                        >
+                                                            <Download size={14}/> Baixar OFX
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                          </>
+                      )}
                   </div>
               </div>
           </div>
