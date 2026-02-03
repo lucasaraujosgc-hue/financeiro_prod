@@ -230,8 +230,11 @@ const ensureColumn = (table, column, definition) => {
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS global_banks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, logo TEXT)`);
-  db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password TEXT, cnpj TEXT, razao_social TEXT, phone TEXT, reset_token TEXT, reset_token_expires INTEGER, role TEXT DEFAULT 'user')`, (err) => {
-      if(!err) ensureColumn('users', 'role', "TEXT DEFAULT 'user'");
+  db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password TEXT, cnpj TEXT, razao_social TEXT, phone TEXT, reset_token TEXT, reset_token_expires INTEGER, role TEXT DEFAULT 'user', created_at TEXT)`, (err) => {
+      if(!err) {
+          ensureColumn('users', 'role', "TEXT DEFAULT 'user'");
+          ensureColumn('users', 'created_at', "TEXT");
+      }
   });
   db.run(`CREATE TABLE IF NOT EXISTS pending_signups (email TEXT PRIMARY KEY, token TEXT, cnpj TEXT, razao_social TEXT, phone TEXT, created_at INTEGER)`);
   db.run(`CREATE TABLE IF NOT EXISTS banks (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, name TEXT, account_number TEXT, nickname TEXT, logo TEXT, active INTEGER DEFAULT 1, balance REAL DEFAULT 0, FOREIGN KEY(user_id) REFERENCES users(id))`);
@@ -342,8 +345,8 @@ app.post('/api/complete-signup', (req, res) => {
         if (!pending) return res.status(400).json({ error: "Inválido" });
 
         const hash = bcrypt.hashSync(password, 10);
-        db.run(`INSERT INTO users (email, password, cnpj, razao_social, phone) VALUES (?, ?, ?, ?, ?)`,
-            [pending.email, hash, pending.cnpj, pending.razao_social, pending.phone],
+        db.run(`INSERT INTO users (email, password, cnpj, razao_social, phone, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+            [pending.email, hash, pending.cnpj, pending.razao_social, pending.phone, new Date().toISOString()],
             function (err) {
                 if (err) return res.status(500).json({ error: err.message });
                 const userId = this.lastID;
@@ -791,19 +794,28 @@ app.get('/api/reports/forecasts', authenticateToken, (req, res) => {
 
 // Admin Routes (CORREÇÃO DE CRASH - VERSÃO ROBUSTA)
 app.get('/api/admin/users', authenticateToken, checkAdmin, (req, res) => {
-    db.all("SELECT id, email, cnpj, razao_social, phone, created_at FROM users", [], (err, rows) => {
+    db.all("SELECT id, email, cnpj, razao_social, phone, created_at FROM users ORDER BY created_at DESC", [], (err, rows) => {
         if (err) {
             console.error("DB Error /api/admin/users:", err);
             return res.status(500).json({ error: "Erro ao buscar usuários." });
         }
         try {
-            const safeRows = Array.isArray(rows) ? rows : [];
-            const processed = safeRows.map(r => ({ 
-                ...r, 
-                cnpj: decrypt(r.cnpj), 
-                razao_social: decrypt(r.razao_social), 
-                phone: decrypt(r.phone) 
-            }));
+            const safeRows = rows || [];
+            console.log(`[Admin] Fetched ${safeRows.length} users.`);
+            
+            const processed = safeRows.map(r => {
+                try {
+                    return { 
+                        ...r, 
+                        cnpj: decrypt(r.cnpj) || r.cnpj, 
+                        razao_social: decrypt(r.razao_social) || r.razao_social, 
+                        phone: decrypt(r.phone) || r.phone
+                    };
+                } catch (e) {
+                    return r; // Fallback to raw row if decrypt fails
+                }
+            });
+            
             res.json(processed);
         } catch (processError) {
             console.error("Processing Error /api/admin/users:", processError);

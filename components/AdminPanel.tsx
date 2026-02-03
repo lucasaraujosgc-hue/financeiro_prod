@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, LayoutDashboard, FileText, Trash2, LogOut, ShieldAlert, BarChart, Eye, X, Download, Calendar, Receipt, ArrowUpRight, FileSpreadsheet, Landmark, Plus, Upload, Edit2, Save, Ban, Search, Printer } from 'lucide-react';
+import { Users, LayoutDashboard, FileText, Trash2, LogOut, ShieldAlert, BarChart, Eye, X, Download, Calendar, Receipt, ArrowUpRight, FileSpreadsheet, Landmark, Plus, Upload, Edit2, Save, Ban, Search, Printer, RefreshCcw } from 'lucide-react';
 
 interface AdminPanelProps {
   token: string;
@@ -44,10 +44,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
               const res = await fetch('/api/admin/users', { headers: getHeaders() });
               if(res.ok) {
                   const data = await res.json();
-                  if (Array.isArray(data)) setUsers(data);
+                  if (Array.isArray(data)) {
+                      setUsers(data);
+                  } else {
+                      console.error("Data received for users is not an array:", data);
+                      setUsers([]);
+                  }
               } else {
-                  console.error("Erro ao buscar usuários");
-                  setUsers([]);
+                  console.error("Erro ao buscar usuários. Status:", res.status);
               }
           }
           else if (tab === 'audit') {
@@ -287,35 +291,50 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
 
           {activeTab === 'users' && (
               <div className="space-y-6 animate-in fade-in">
-                  <h2 className="text-2xl font-bold text-white">Gerenciar Usuários</h2>
+                  <div className="flex justify-between items-center">
+                      <h2 className="text-2xl font-bold text-white">Gerenciar Usuários</h2>
+                      <button 
+                        onClick={() => loadTabContent('users')} 
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                      >
+                          <RefreshCcw size={16} className={loading ? "animate-spin" : ""} /> Atualizar Lista
+                      </button>
+                  </div>
+                  
                   <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-lg">
-                      <table className="w-full text-sm text-left">
-                          <thead className="bg-slate-800 text-slate-400 font-bold uppercase text-xs">
-                              <tr>
-                                  <th className="px-6 py-4">Razão Social</th>
-                                  <th className="px-6 py-4">Email</th>
-                                  <th className="px-6 py-4">CNPJ</th>
-                                  <th className="px-6 py-4 text-center">Ações</th>
-                              </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-800">
-                              {users.length === 0 ? (
-                                  <tr><td colSpan={4} className="px-6 py-8 text-center text-slate-500">Nenhum usuário cadastrado.</td></tr>
-                              ) : (
-                                  users.map(u => (
-                                      <tr key={u.id} className="hover:bg-slate-800/50">
-                                          <td className="px-6 py-4 font-medium text-white">{u.razao_social}</td>
-                                          <td className="px-6 py-4 text-slate-300">{u.email}</td>
-                                          <td className="px-6 py-4 text-slate-400 font-mono text-xs">{u.cnpj}</td>
-                                          <td className="px-6 py-4 text-center flex items-center justify-center gap-2">
-                                              <button onClick={() => handleOpenUser(u)} className="p-2 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20" title="Ver Detalhes"><Eye size={18}/></button> 
-                                              <button onClick={() => handleDeleteUser(u.id, u.email)} className="p-2 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20" title="Excluir Usuário"><Trash2 size={18}/></button>
-                                          </td>
-                                      </tr>
-                                  ))
-                              )}
-                          </tbody>
-                      </table>
+                      <div className="overflow-x-auto">
+                          <table className="w-full text-sm text-left">
+                              <thead className="bg-slate-800 text-slate-400 font-bold uppercase text-xs">
+                                  <tr>
+                                      <th className="px-6 py-4">Razão Social</th>
+                                      <th className="px-6 py-4">Email</th>
+                                      <th className="px-6 py-4">CNPJ</th>
+                                      <th className="px-6 py-4">Data Cadastro</th>
+                                      <th className="px-6 py-4 text-center">Ações</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-800">
+                                  {users.length === 0 ? (
+                                      <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-500">Nenhum usuário encontrado.</td></tr>
+                                  ) : (
+                                      users.map(u => (
+                                          <tr key={u.id} className="hover:bg-slate-800/50">
+                                              <td className="px-6 py-4 font-medium text-white">{u.razao_social || 'Sem Nome'}</td>
+                                              <td className="px-6 py-4 text-slate-300">{u.email}</td>
+                                              <td className="px-6 py-4 text-slate-400 font-mono text-xs">{u.cnpj}</td>
+                                              <td className="px-6 py-4 text-slate-500 text-xs">
+                                                  {u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}
+                                              </td>
+                                              <td className="px-6 py-4 text-center flex items-center justify-center gap-2">
+                                                  <button onClick={() => handleOpenUser(u)} className="p-2 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20" title="Ver Detalhes"><Eye size={18}/></button> 
+                                                  <button onClick={() => handleDeleteUser(u.id, u.email)} className="p-2 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20" title="Excluir Usuário"><Trash2 size={18}/></button>
+                                              </td>
+                                          </tr>
+                                      ))
+                                  )}
+                              </tbody>
+                          </table>
+                      </div>
                   </div>
               </div>
           )}
