@@ -789,12 +789,26 @@ app.get('/api/reports/forecasts', authenticateToken, (req, res) => {
     });
 });
 
-// Admin Routes (CORREÇÃO DE CRASH)
+// Admin Routes (CORREÇÃO DE CRASH - VERSÃO ROBUSTA)
 app.get('/api/admin/users', authenticateToken, checkAdmin, (req, res) => {
     db.all("SELECT id, email, cnpj, razao_social, phone, created_at FROM users", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        const safeRows = rows || [];
-        res.json(safeRows.map(r => ({ ...r, cnpj: decrypt(r.cnpj), razao_social: decrypt(r.razao_social), phone: decrypt(r.phone) })));
+        if (err) {
+            console.error("DB Error /api/admin/users:", err);
+            return res.status(500).json({ error: "Erro ao buscar usuários." });
+        }
+        try {
+            const safeRows = Array.isArray(rows) ? rows : [];
+            const processed = safeRows.map(r => ({ 
+                ...r, 
+                cnpj: decrypt(r.cnpj), 
+                razao_social: decrypt(r.razao_social), 
+                phone: decrypt(r.phone) 
+            }));
+            res.json(processed);
+        } catch (processError) {
+            console.error("Processing Error /api/admin/users:", processError);
+            res.status(500).json({ error: "Erro ao processar dados de usuários." });
+        }
     });
 });
 app.get('/api/admin/global-data', authenticateToken, checkAdmin, (req, res) => {

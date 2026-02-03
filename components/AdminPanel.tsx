@@ -164,6 +164,67 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
       } 
   };
 
+  const exportToCSV = (transactions: any[], userName: string) => {
+    if (!transactions || transactions.length === 0) return alert("Sem dados para exportar.");
+    
+    const headers = ["Data", "Descrição", "Valor", "Tipo", "Categoria", "Banco", "Conciliado"];
+    const csvContent = [
+        headers.join(","),
+        ...transactions.map(t => {
+            const date = new Date(t.date).toLocaleDateString('pt-BR');
+            const desc = `"${(t.description || '').replace(/"/g, '""')}"`; 
+            const val = t.value.toFixed(2).replace('.', ',');
+            const type = t.type === 'credito' ? 'Receita' : 'Despesa';
+            const cat = t.category_name || '-';
+            const bank = t.bank_name || '-';
+            const status = t.reconciled ? 'Sim' : 'Não';
+            return `${date},${desc},${val},${type},"${cat}","${bank}",${status}`;
+        })
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `extrato_${userName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportToXML = (transactions: any[], userName: string) => {
+    if (!transactions || transactions.length === 0) return alert("Sem dados para exportar.");
+
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<FinancialTransactions>\n';
+    xml += `  <Company>${userName}</Company>\n`;
+    xml += `  <ExportDate>${new Date().toISOString()}</ExportDate>\n`;
+    xml += '  <Transactions>\n';
+    
+    transactions.forEach(t => {
+        xml += '    <Transaction>\n';
+        xml += `      <ID>${t.id}</ID>\n`;
+        xml += `      <Date>${t.date}</Date>\n`;
+        xml += `      <Description>${(t.description || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</Description>\n`;
+        xml += `      <Value>${t.value}</Value>\n`;
+        xml += `      <Type>${t.type}</Type>\n`;
+        xml += `      <Category>${t.category_name || ''}</Category>\n`;
+        xml += `      <Bank>${t.bank_name || ''}</Bank>\n`;
+        xml += '    </Transaction>\n';
+    });
+    
+    xml += '  </Transactions>\n';
+    xml += '</FinancialTransactions>';
+
+    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `extrato_${userName.replace(/\s+/g, '_')}.xml`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const filterByDate = (items: any[]) => items?.filter(item => { 
       const d = item.date || item.import_date; 
       return d && d.split('T')[0] >= startDate && d.split('T')[0] <= endDate; 
@@ -325,12 +386,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
           )}
       </main>
 
-      {/* User Details Modal (Simplificado para brevidade, mantendo lógica de fetch) */}
+      {/* User Details Modal (Atualizado com Exportação) */}
       {selectedUser && userDetails && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
               <div className="bg-slate-900 border border-slate-700 w-full max-w-5xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
                   <div className="p-6 border-b border-slate-800 flex justify-between bg-slate-950">
-                      <h2 className="text-2xl font-bold text-white">{selectedUser.razao_social}</h2>
+                      <div className="flex flex-col">
+                          <h2 className="text-2xl font-bold text-white">{selectedUser.razao_social}</h2>
+                          <div className="flex gap-2 mt-2">
+                              <button 
+                                onClick={() => exportToCSV(userDetails.transactions, selectedUser.razao_social)}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded flex items-center gap-1"
+                              >
+                                  <FileSpreadsheet size={14}/> Exportar Excel/CSV
+                              </button>
+                              <button 
+                                onClick={() => exportToXML(userDetails.transactions, selectedUser.razao_social)}
+                                className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded flex items-center gap-1"
+                              >
+                                  <FileText size={14}/> Exportar XML
+                              </button>
+                          </div>
+                      </div>
                       <button onClick={() => setSelectedUser(null)} className="text-slate-400 hover:text-white"><X size={24}/></button>
                   </div>
                   <div className="flex-1 overflow-auto p-6">
