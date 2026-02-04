@@ -561,7 +561,14 @@ app.get('/api/keyword-rules', authenticateToken, (req, res) => {
 });
 app.post('/api/keyword-rules', authenticateToken, (req, res) => {
     const { keyword, type, categoryId, bankId } = req.body;
-    db.run(`INSERT INTO keyword_rules (user_id, keyword, type, category_id, bank_id) VALUES (?, ?, ?, ?, ?)`, [req.userId, keyword, type, category_id, bank_id], function(err) { res.json({id: this.lastID}); });
+    // CORREÇÃO: Utilizando os nomes corretos das variáveis (categoryId e bankId) para evitar ReferenceError
+    db.run(`INSERT INTO keyword_rules (user_id, keyword, type, category_id, bank_id) VALUES (?, ?, ?, ?, ?)`, 
+        [req.userId, keyword, type, categoryId, bankId], 
+        function(err) { 
+            if(err) return res.status(500).json({error: err.message});
+            res.json({id: this.lastID}); 
+        }
+    );
 });
 app.delete('/api/keyword-rules/:id', authenticateToken, (req, res) => {
     db.run(`DELETE FROM keyword_rules WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err) => res.json({success: !err}));

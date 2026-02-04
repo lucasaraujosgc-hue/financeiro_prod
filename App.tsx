@@ -180,7 +180,12 @@ function App() {
       await apiFetch(`/api/banks/${id}`, { method: 'DELETE' }); fetchBanks();
   };
   const handleAddKeywordRule = async (r: any) => {
-      const res = await apiFetch('/api/keyword-rules', { method: 'POST', body: JSON.stringify(r) }); if(res.ok) fetchKeywordRules();
+      const res = await apiFetch('/api/keyword-rules', { method: 'POST', body: JSON.stringify(r) }); 
+      if(res.ok) {
+          fetchKeywordRules();
+      } else {
+          alert("Erro ao adicionar regra. Verifique os dados.");
+      }
   };
   const handleDeleteKeywordRule = async (id: number) => {
       await apiFetch(`/api/keyword-rules/${id}`, { method: 'DELETE' }); fetchKeywordRules();
