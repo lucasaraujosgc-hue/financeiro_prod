@@ -188,7 +188,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
         })
     ].join("\n");
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Adiciona BOM (\uFEFF) para garantir que o Excel reconheça o UTF-8 corretamente
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
