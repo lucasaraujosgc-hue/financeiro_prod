@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Transaction, Category } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ComposedChart, Line } from 'recharts';
-import { ChevronLeft, ChevronRight, Filter, Download, CalendarRange, Percent, Activity, TrendingUp, Info, Target, AlertCircle, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Filter, Download, CalendarRange, Percent, Activity, TrendingUp, Info, Target, AlertCircle, CheckCircle, Construction } from 'lucide-react';
 
 interface ReportsProps {
   token: string;
@@ -11,52 +11,6 @@ interface ReportsProps {
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16'];
 const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-
-const BENCHMARK_DATA = {
-    MC: [
-        { sector: 'Comércio varejista', range: '30% a 50%' },
-        { sector: 'Supermercados', range: '15% a 25%' },
-        { sector: 'Indústria', range: '35% a 55%' },
-        { sector: 'Prestação de serviços', range: '50% a 70%' },
-        { sector: 'Tecnologia / SaaS', range: '70% a 85%' },
-        { sector: 'Restaurantes', range: '40% a 60%' },
-        { sector: 'Construção civil', range: '25% a 40%' }
-    ],
-    RO: [
-        { sector: 'Comércio varejista', range: '5% a 12%' },
-        { sector: 'Supermercados', range: '2% a 6%' },
-        { sector: 'Indústria', range: '8% a 15%' },
-        { sector: 'Prestação de serviços', range: '15% a 30%' },
-        { sector: 'Tecnologia / SaaS', range: '20% a 40%' },
-        { sector: 'Restaurantes', range: '5% a 15%' },
-        { sector: 'Construção civil', range: '8% a 20%' }
-    ],
-    RL: [
-        { sector: 'Comércio varejista', range: '3% a 8%' },
-        { sector: 'Supermercados', range: '1% a 4%' },
-        { sector: 'Indústria', range: '5% a 10%' },
-        { sector: 'Prestação de serviços', range: '10% a 25%' },
-        { sector: 'Tecnologia / SaaS', range: '15% a 35%' },
-        { sector: 'Restaurantes', range: '3% a 10%' },
-        { sector: 'Construção civil', range: '5% a 15%' }
-    ]
-};
-
-const READINGS = {
-    MC: [
-        { status: 'Baixo', desc: 'Preço baixo ou custo variável alto' },
-        { status: 'Ideal', desc: 'Dentro da faixa saudável' },
-        { status: 'Alto', desc: 'Atenção a preço fora de mercado' }
-    ],
-    RO: [
-        { status: 'Baixo', desc: 'Despesas fixas descontroladas' },
-        { status: 'Negativo', desc: 'Modelo de negócio em risco' }
-    ],
-    RL: [
-        { status: 'Baixo', desc: 'Impacto financeiro ou tributário' },
-        { status: 'Alto', desc: 'Pode indicar subtributação ou erro' }
-    ]
-};
 
 const Reports: React.FC<ReportsProps> = ({ token }) => {
   const [activeTab, setActiveTab] = useState<'cashflow' | 'dre' | 'analysis' | 'forecasts'>('cashflow');
@@ -108,9 +62,14 @@ const Reports: React.FC<ReportsProps> = ({ token }) => {
       
       let endpoint = '';
       if (activeTab === 'cashflow') endpoint = `/api/reports/cash-flow?year=${year}&month=${month}`;
-      if (activeTab === 'dre') endpoint = `/api/reports/dre?year=${year}&month=${month}`;
-      if (activeTab === 'analysis') endpoint = `/api/reports/analysis?year=${year}&month=${month}`;
+      // DRE and Analysis endpoints skipped since they are "In Development" for the UI part, 
+      // but logic remains if needed later. For now, fetch forecast if tab is forecasts.
       if (activeTab === 'forecasts') endpoint = `/api/reports/forecasts?year=${year}&month=${month}`;
+
+      if (!endpoint) {
+          setLoading(false);
+          return;
+      }
 
       try {
           const res = await fetch(endpoint, {
@@ -288,147 +247,18 @@ const Reports: React.FC<ReportsProps> = ({ token }) => {
       );
   };
 
-  const renderDRE = () => {
-      if (!data || typeof data.receitaBruta === 'undefined') return null;
-
-      const DreRow = ({ label, value, isTotal = false, isSubtotal = false, indent = false }: any) => (
-          <div className={`flex justify-between items-center py-3 border-b border-slate-800 ${isTotal ? 'bg-slate-900/50 font-bold text-white px-2 rounded' : ''} ${isSubtotal ? 'font-semibold text-slate-200' : 'text-slate-400'}`}>
-              <span className={`${indent ? 'pl-6' : ''}`}>{label}</span>
-              <span className={`${(value || 0) < 0 ? 'text-rose-500' : (isTotal ? 'text-sky-400' : 'text-slate-200')}`}>
-                  R$ {(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </span>
+  const renderUnderConstruction = () => (
+      <div className="min-h-[400px] flex flex-col items-center justify-center bg-slate-900/50 rounded-xl border border-slate-800 border-dashed animate-in fade-in zoom-in duration-300">
+          <div className="p-6 rounded-full bg-slate-800 mb-4 text-amber-500">
+              <Construction size={48} />
           </div>
-      );
-
-      return (
-          <div className="bg-surface rounded-xl border border-slate-800 p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto">
-              <h3 className="text-xl font-bold text-white mb-6 text-center border-b border-slate-800 pb-4">
-                  Demonstração do Resultado do Exercício (DRE)
-              </h3>
-              
-              <DreRow label="Receita Bruta" value={data.receitaBruta} isSubtotal />
-              <DreRow label="(-) Impostos sobre faturamento" value={-data.deducoes} indent />
-              <DreRow label="(=) Receita Líquida" value={data.receitaLiquida} isTotal />
-              
-              <div className="h-4"></div>
-              
-              <DreRow label="(-) Custos Operacionais (CMV/CSP)" value={-data.cmv} indent />
-              <DreRow label="(=) Resultado Bruto" value={data.resultadoBruto} isTotal />
-              
-              <div className="h-4"></div>
-              
-              <DreRow label="(-) Despesas Operacionais" value={-data.despesasOperacionais} indent />
-              <DreRow label="(=) Resultado Operacional" value={data.resultadoOperacional} isTotal />
-              
-              <div className="h-4"></div>
-              
-              <DreRow label="(+/-) Resultado Financeiro" value={data.resultadoFinanceiro} />
-              <DreRow label="(+/-) Outras Receitas Operacionais" value={data.outrasReceitas} />
-              <DreRow label="(=) Resultado Antes do Não Operacional" value={data.resultadoAntesNaoOperacional} isTotal />
-              
-              <div className="h-4"></div>
-              
-              <DreRow label="(+/-) Resultado Não Operacional" value={data.resultadoNaoOperacional} />
-              
-              <div className="mt-4 p-4 bg-emerald-900/20 border border-emerald-900/50 rounded-lg flex justify-between items-center">
-                  <span className="text-lg font-bold text-emerald-400">RESULTADO LÍQUIDO</span>
-                  <span className={`text-xl font-bold ${(data.lucroLiquido || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      R$ {(data.lucroLiquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-              </div>
-          </div>
-      );
-  };
-
-  const renderAnalysis = () => {
-      if (!data || !data.receitas) return null;
-
-      const KPI = ({ title, value, icon, type }: { title: string, value: number, icon: any, type: 'MC' | 'RO' | 'RL' }) => (
-          <div className="bg-surface p-4 rounded-xl border border-slate-800 shadow-sm flex flex-col justify-between h-full relative group">
-              <div className="flex justify-between items-start mb-2">
-                  <div className="p-1.5 bg-slate-800 rounded-lg text-primary border border-slate-700">
-                      {icon}
-                  </div>
-                  <span className={`text-xl font-bold ${value >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {value.toFixed(2)}%
-                  </span>
-              </div>
-              <div className="flex items-center gap-2">
-                  <h4 className="text-slate-200 font-semibold text-sm">{title}</h4>
-                  <Info size={14} className="text-slate-500 cursor-help" />
-              </div>
-
-              <div className="absolute top-full left-0 mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-4 z-50 hidden group-hover:block animate-in fade-in zoom-in duration-150">
-                  <h5 className="font-bold text-white text-xs mb-2 border-b border-slate-800 pb-1">Referências por Setor (%)</h5>
-                  <ul className="space-y-1 mb-3">
-                      {BENCHMARK_DATA[type].map((item, idx) => (
-                          <li key={idx} className="flex justify-between text-[10px] text-slate-300">
-                              <span>{item.sector}</span>
-                              <span className="font-mono text-emerald-400">{item.range}</span>
-                          </li>
-                      ))}
-                  </ul>
-                  <h5 className="font-bold text-white text-xs mb-2 border-b border-slate-800 pb-1">Leitura Prática</h5>
-                  <ul className="space-y-1">
-                      {READINGS[type].map((item, idx) => (
-                          <li key={idx} className="text-[10px] text-slate-400">
-                              <span className="text-primary font-bold">{item.status}:</span> {item.desc}
-                          </li>
-                      ))}
-                  </ul>
-              </div>
-          </div>
-      );
-
-      return (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              
-              {data.kpis && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <KPI title="Margem de Contribuição" value={data.kpis.margemContribuicaoPct} icon={<Percent size={18}/>} type="MC"/>
-                      <KPI title="Resultado Operacional" value={data.kpis.resultadoOperacionalPct} icon={<Activity size={18}/>} type="RO"/>
-                      <KPI title="Resultado Líquido" value={data.kpis.resultadoLiquidoPct} icon={<TrendingUp size={18}/>} type="RL"/>
-                  </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-surface p-6 rounded-xl border border-slate-800">
-                      <h3 className="text-white font-bold mb-4">Análise de Receitas</h3>
-                      <div className="space-y-3">
-                          {Object.entries(data.receitas).map(([name, value]: any) => (
-                              <div key={name}>
-                                  <div className="flex justify-between text-sm mb-1">
-                                      <span className="text-slate-300">{name}</span>
-                                      <span className="text-emerald-400 font-bold">R$ {value.toFixed(2)}</span>
-                                  </div>
-                                  <div className="w-full bg-slate-800 rounded-full h-2">
-                                      <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${(value / data.totalReceitas) * 100}%` }}></div>
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-
-                  <div className="bg-surface p-6 rounded-xl border border-slate-800">
-                      <h3 className="text-white font-bold mb-4">Análise de Despesas</h3>
-                      <div className="space-y-3">
-                          {Object.entries(data.despesas).map(([name, value]: any) => (
-                              <div key={name}>
-                                  <div className="flex justify-between text-sm mb-1">
-                                      <span className="text-slate-300">{name}</span>
-                                      <span className="text-rose-400 font-bold">R$ {value.toFixed(2)}</span>
-                                  </div>
-                                  <div className="w-full bg-slate-800 rounded-full h-2">
-                                      <div className="bg-rose-500 h-2 rounded-full" style={{ width: `${(value / data.totalDespesas) * 100}%` }}></div>
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-              </div>
-          </div>
-      );
-  };
+          <h2 className="text-2xl font-bold text-white mb-2">Em Desenvolvimento</h2>
+          <p className="text-slate-400 text-center max-w-md">
+              Estamos trabalhando para trazer uma visualização gerencial ainda mais detalhada.
+              <br/>Esta funcionalidade estará disponível em breve.
+          </p>
+      </div>
+  );
 
   const renderForecasts = () => {
       if (!data || !data.summary) return null;
@@ -624,8 +454,8 @@ const Reports: React.FC<ReportsProps> = ({ token }) => {
               <>
                 {activeTab === 'cashflow' && renderCashFlow()}
                 {activeTab === 'forecasts' && renderForecasts()}
-                {activeTab === 'dre' && renderDRE()}
-                {activeTab === 'analysis' && renderAnalysis()}
+                {activeTab === 'dre' && renderUnderConstruction()}
+                {activeTab === 'analysis' && renderUnderConstruction()}
               </>
           )}
       </div>

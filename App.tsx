@@ -16,7 +16,7 @@ import KeywordRules from './components/KeywordRules';
 import Tutorial from './components/Tutorial';
 import AdminPanel from './components/AdminPanel'; 
 import { Transaction, Bank, Category, Forecast, KeywordRule } from './types';
-import { AlertTriangle, RefreshCcw } from 'lucide-react';
+import { AlertTriangle, RefreshCcw, Lock, LogOut } from 'lucide-react';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -62,7 +62,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated && token && user?.role !== 'admin') {
+    if (isAuthenticated && token && user?.role !== 'admin' && !user?.blocked) {
         fetchInitialData();
     }
   }, [isAuthenticated, token, user]);
@@ -248,6 +248,41 @@ function App() {
     if (authView === 'finalize') return <FinalizeSignUp token={urlToken || ''} onSuccess={() => { setAuthView('login'); setUrlToken(null); }} />;
     if (authView === 'reset') return <ResetPassword token={urlToken || ''} onSuccess={() => setAuthView('login')} />;
     return <Login onLogin={handleLogin} onForgotPassword={() => setAuthView('forgot')} onSignUp={() => setAuthView('signup')} isLoading={isLoading} />;
+  }
+
+  // --- BLOCKED USER MODAL ---
+  if (user?.blocked) {
+      return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 p-4">
+              <div className="bg-slate-900 border border-red-500/50 rounded-2xl shadow-2xl w-full max-w-lg p-8 text-center animate-in fade-in zoom-in duration-300 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-2 bg-red-500"></div>
+                  <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+                      <Lock size={40} className="text-red-500" />
+                  </div>
+                  <h2 className="text-3xl font-bold text-white mb-4">Acesso Bloqueado</h2>
+                  <p className="text-slate-300 text-lg mb-2">
+                      Existem pendências financeiras ou cadastrais em sua conta.
+                  </p>
+                  <p className="text-slate-400 mb-8 text-sm leading-relaxed">
+                      Por favor, entre em contato com nosso departamento financeiro para regularizar sua situação e restabelecer o acesso ao sistema.
+                  </p>
+                  
+                  <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-8">
+                      <p className="text-sm font-medium text-slate-400 mb-1">Canal de Atendimento:</p>
+                      <a href="mailto:suporte@virgulacontabil.com.br" className="text-primary hover:underline font-bold text-lg block">
+                          suporte@virgulacontabil.com.br
+                      </a>
+                  </div>
+
+                  <button 
+                    onClick={handleLogout}
+                    className="flex items-center justify-center gap-2 w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-medium transition-colors border border-slate-700"
+                  >
+                      <LogOut size={18} /> Sair do Sistema
+                  </button>
+              </div>
+          </div>
+      );
   }
 
   if (user?.role === 'admin') return <AdminPanel token={token || ''} onLogout={handleLogout} />;

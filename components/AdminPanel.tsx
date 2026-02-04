@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, LayoutDashboard, FileText, Trash2, LogOut, ShieldAlert, BarChart, Eye, X, Download, Calendar, Receipt, ArrowUpRight, FileSpreadsheet, Landmark, Plus, Upload, Edit2, Save, Ban, Search, Printer, RefreshCcw, FileCode, HardDrive } from 'lucide-react';
+import { Users, LayoutDashboard, FileText, Trash2, LogOut, ShieldAlert, BarChart, Eye, X, Download, Calendar, Receipt, ArrowUpRight, FileSpreadsheet, Landmark, Plus, Upload, Edit2, Save, Ban, Search, Printer, RefreshCcw, FileCode, HardDrive, CheckCircle } from 'lucide-react';
 
 interface AdminPanelProps {
   token: string;
@@ -110,6 +110,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
                   setSelectedUser(null); 
               } else {
                   alert("Erro ao remover usuário");
+              }
+          } catch (e) {
+              alert("Erro de conexão");
+          }
+      }
+  };
+
+  const handleBlockUser = async (id: number, currentBlocked: boolean) => {
+      const action = currentBlocked ? 'desbloquear' : 'bloquear';
+      if (confirm(`Deseja realmente ${action} este usuário?`)) {
+          try {
+              const res = await fetch(`/api/admin/users/${id}/block`, { 
+                  method: 'PUT', 
+                  headers: getHeaders(),
+                  body: JSON.stringify({ blocked: !currentBlocked })
+              });
+              if(res.ok) {
+                  loadTabContent('users');
+              } else {
+                  alert("Erro ao alterar status");
               }
           } catch (e) {
               alert("Erro de conexão");
@@ -294,24 +314,51 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ token, onLogout }) => {
                                       <th className="px-6 py-4">Email</th>
                                       <th className="px-6 py-4">CNPJ</th>
                                       <th className="px-6 py-4">Data Cadastro</th>
+                                      <th className="px-6 py-4 text-center">Status</th>
                                       <th className="px-6 py-4 text-center">Ações</th>
                                   </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-800">
                                   {users.length === 0 ? (
-                                      <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-500">Nenhum usuário encontrado.</td></tr>
+                                      <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-500">Nenhum usuário encontrado.</td></tr>
                                   ) : (
                                       users.map(u => (
-                                          <tr key={u.id} className="hover:bg-slate-800/50">
-                                              <td className="px-6 py-4 font-medium text-white">{u.razao_social || 'Sem Nome'}</td>
+                                          <tr key={u.id} className={`hover:bg-slate-800/50 ${u.blocked ? 'bg-red-900/10' : ''}`}>
+                                              <td className={`px-6 py-4 font-medium ${u.blocked ? 'text-red-400' : 'text-white'}`}>{u.razao_social || 'Sem Nome'}</td>
                                               <td className="px-6 py-4 text-slate-300">{u.email}</td>
                                               <td className="px-6 py-4 text-slate-400 font-mono text-xs">{u.cnpj}</td>
                                               <td className="px-6 py-4 text-slate-500 text-xs">
                                                   {u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}
                                               </td>
+                                              <td className="px-6 py-4 text-center">
+                                                  {u.blocked ? (
+                                                      <span className="bg-red-500/20 text-red-500 px-2 py-1 rounded text-xs font-bold border border-red-500/30">BLOQUEADO</span>
+                                                  ) : (
+                                                      <span className="bg-emerald-500/20 text-emerald-500 px-2 py-1 rounded text-xs font-bold border border-emerald-500/30">ATIVO</span>
+                                                  )}
+                                              </td>
                                               <td className="px-6 py-4 text-center flex items-center justify-center gap-2">
-                                                  <button onClick={() => handleOpenUser(u)} className="p-2 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20" title="Ver Detalhes"><Eye size={18}/></button> 
-                                                  <button onClick={() => handleDeleteUser(u.id, u.email)} className="p-2 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20" title="Excluir Usuário"><Trash2 size={18}/></button>
+                                                  <button 
+                                                    onClick={() => handleOpenUser(u)} 
+                                                    className="p-2 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20" 
+                                                    title="Ver Detalhes"
+                                                  >
+                                                      <Eye size={18}/>
+                                                  </button> 
+                                                  <button 
+                                                    onClick={() => handleBlockUser(u.id, u.blocked)} 
+                                                    className={`p-2 rounded ${u.blocked ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : 'bg-orange-500/10 text-orange-500 hover:bg-orange-500/20'}`}
+                                                    title={u.blocked ? "Desbloquear Usuário" : "Bloquear Usuário"}
+                                                  >
+                                                      {u.blocked ? <CheckCircle size={18}/> : <Ban size={18}/>}
+                                                  </button>
+                                                  <button 
+                                                    onClick={() => handleDeleteUser(u.id, u.email)} 
+                                                    className="p-2 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20" 
+                                                    title="Excluir Usuário"
+                                                  >
+                                                      <Trash2 size={18}/>
+                                                  </button>
                                               </td>
                                           </tr>
                                       ))

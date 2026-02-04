@@ -230,10 +230,11 @@ const ensureColumn = (table, column, definition) => {
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS global_banks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, logo TEXT)`);
-  db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password TEXT, cnpj TEXT, razao_social TEXT, phone TEXT, reset_token TEXT, reset_token_expires INTEGER, role TEXT DEFAULT 'user', created_at TEXT)`, (err) => {
+  db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password TEXT, cnpj TEXT, razao_social TEXT, phone TEXT, reset_token TEXT, reset_token_expires INTEGER, role TEXT DEFAULT 'user', created_at TEXT, blocked INTEGER DEFAULT 0)`, (err) => {
       if(!err) {
           ensureColumn('users', 'role', "TEXT DEFAULT 'user'");
           ensureColumn('users', 'created_at', "TEXT");
+          ensureColumn('users', 'blocked', "INTEGER DEFAULT 0");
       }
   });
   db.run(`CREATE TABLE IF NOT EXISTS pending_signups (email TEXT PRIMARY KEY, token TEXT, cnpj TEXT, razao_social TEXT, phone TEXT, created_at INTEGER)`);
@@ -284,11 +285,19 @@ app.post('/api/login', (req, res) => {
         if (err || !user) return res.status(401).json({ error: "Credenciais inválidas" });
         if (!bcrypt.compareSync(inputPass, user.password)) return res.status(401).json({ error: "Credenciais inválidas" });
 
+        // Include blocked status in token or user object logic handled in frontend
         const token = jwt.sign({ id: user.id, email: user.email, role: user.role || 'user' }, JWT_SECRET, { expiresIn: '24h' });
         logAudit(user.id, 'LOGIN', 'Sucesso', req.ip);
         res.json({ 
             token, 
-            user: { id: user.id, email: user.email, razaoSocial: decrypt(user.razao_social), cnpj: decrypt(user.cnpj), role: user.role } 
+            user: { 
+                id: user.id, 
+                email: user.email, 
+                razaoSocial: decrypt(user.razao_social), 
+                cnpj: decrypt(user.cnpj), 
+                role: user.role,
+                blocked: user.blocked // Envia status de bloqueio
+            } 
         });
     });
 });
@@ -794,7 +803,7 @@ app.get('/api/reports/forecasts', authenticateToken, (req, res) => {
 
 // Admin Routes (CORREÇÃO DE CRASH - VERSÃO ROBUSTA)
 app.get('/api/admin/users', authenticateToken, checkAdmin, (req, res) => {
-    db.all("SELECT id, email, cnpj, razao_social, phone, created_at FROM users ORDER BY created_at DESC", [], (err, rows) => {
+    db.all("SELECT id, email, cnpj, razao_social, phone, created_at, blocked FROM users ORDER BY created_at DESC", [], (err, rows) => {
         if (err) {
             console.error("DB Error /api/admin/users:", err);
             return res.status(500).json({ error: "Erro ao buscar usuários." });
@@ -809,7 +818,8 @@ app.get('/api/admin/users', authenticateToken, checkAdmin, (req, res) => {
                         ...r, 
                         cnpj: decrypt(r.cnpj) || r.cnpj, 
                         razao_social: decrypt(r.razao_social) || r.razao_social, 
-                        phone: decrypt(r.phone) || r.phone
+                        phone: decrypt(r.phone) || r.phone,
+                        blocked: !!r.blocked
                     };
                 } catch (e) {
                     return r; // Fallback to raw row if decrypt fails
@@ -821,6 +831,13 @@ app.get('/api/admin/users', authenticateToken, checkAdmin, (req, res) => {
             console.error("Processing Error /api/admin/users:", processError);
             res.status(500).json({ error: "Erro ao processar dados de usuários." });
         }
+    });
+});
+app.put('/api/admin/users/:id/block', authenticateToken, checkAdmin, (req, res) => {
+    const { blocked } = req.body;
+    db.run("UPDATE users SET blocked = ? WHERE id = ?", [blocked ? 1 : 0, req.params.id], function(err) {
+        if(err) return res.status(500).json({error: err.message});
+        res.json({success: true});
     });
 });
 app.get('/api/admin/global-data', authenticateToken, checkAdmin, (req, res) => {
